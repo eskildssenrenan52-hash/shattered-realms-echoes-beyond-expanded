@@ -9,7 +9,7 @@
 - [x] Expandir o Atlas: marcador do Mapa dos Atos, lista de cinco reinos, oito ilhas do Arquipélago e todos os biomas secretos com estados de descoberta.
 - [x] Acrescentar cinco cidades-reinos pós-Ato V (Ecos Além), cada uma com cidade, baús, corrida, ondas, chefe, recompensa e gate próprio, além de 120 crônicas determinísticas separadas dos cinco reinos dos Atos.
 - [ ] Transformar os dez sistemas criativos de Ecos Além (por enquanto listados honestamente como horizontes planejados) em fluxos com entrada, progresso e consequência persistente.
-- [ ] Validar novamente a suíte completa, build, servidor e percurso fim do Ato I → Travessias da Manopla após as correções da revisão, então corrigir regressões confirmadas antes do checkpoint.
+- [x] Validar novamente a suíte completa (28 arquivos, 131 testes), `tsc --noEmit`, build de produção e servidor HTTP; cobrir em teste o percurso fim do Ato I → Travessias da Manopla e corrigir as regressões confirmadas antes do checkpoint.
 
 ## Expansão pós-campanha — Cidadela de Gehenna
 - [ ] Preservar as oito zonas, quests, história e IDs de save da Saga Gehenna; adicionar uma entrada física da cidadela no extremo remoto do mundo.
