@@ -16,6 +16,7 @@ import type { Beat } from './story';
 import './saga-extra';
 import { drawSagaScenery, drawSagaWeather, sagaSceneLights } from './saga-fx';
 import { bossHp } from './boss-tuning';
+import { beyondBossModifiers } from './echoes-balance';
 import { MANOPLA_ITEM, MANOPLA_QUEST } from './manopla';
 import { sagaModeOnKill, sagaModeStatus, sagaModeTick as tickSagaMode, startSagaMode } from './saga-modes';
 
@@ -110,11 +111,13 @@ export const sagaBeats = (): Beat[] => SAGA_REALMS.flatMap((r) => [
 /* ───────────── Entrar nas zonas ───────────── */
 export function enterSagaZone(g: Game, ri: number, zi: number) {
   const r = SAGA_REALMS[ri]!, zn = r.zones[zi]!, data = zoneFloor(r, ri, zi);
-  enterDepthState(g, { kind: 'temple', floor: zi + 1, temple: zoneTemple(r, zi), data, stair: 'spiral' }, 1.15 + ri * 0.04);
+  const echoCycle = r.gate === 'ecos' ? beyondBossModifiers(g.echoSystems, r.id) : { hp: 1, atk: 1, reward: 1 };
+  const cycleStrength = r.gate === 'ecos' ? Math.min(0.6, g.echoSystems.beyond.cycle * 0.06) : 0;
+  enterDepthState(g, { kind: 'temple', floor: zi + 1, temple: zoneTemple(r, zi), data, stair: 'spiral' }, 1.15 + ri * 0.04 + cycleStrength);
   const id = sagaBossId(r, zi);
   if (!g.bossesDone.has(id) && zn.mode !== 'town' && zn.mode !== 'survival') {
     const st = bossStats(r, zi), end = data.stairs;
-    const def: BossDef = { id, name: zn.boss.name, biome: zn.biome, tx: end.tx, ty: end.ty - 2, hp: st.hp, atk: st.atk, xp: st.xp, gold: st.gold, color: zn.boss.tint, minion: zn.enemies[0]!, reward: ['elixir', 'hi_potion', 'eco_shard'] };
+    const def: BossDef = { id, name: zn.boss.name, biome: zn.biome, tx: end.tx, ty: end.ty - 2, hp: Math.round(st.hp * echoCycle.hp), atk: Math.round(st.atk * echoCycle.atk), xp: Math.round(st.xp * echoCycle.reward), gold: Math.round(st.gold * echoCycle.reward), color: zn.boss.tint, minion: zn.enemies[0]!, reward: ['elixir', 'hi_potion', 'eco_shard'] };
     const e = g.makeEnemy(zn.boss.kind, def.tx * TS + 8, def.ty * TS + 8, 1);
     e.hp = e.maxhp = bossHp(def.hp); e.atk = def.atk; e.def = 8 + Math.floor(st.level / 3); e.xp = def.xp; e.gold = def.gold; e.speed = 32; e.level = st.level;
     e.boss = { def, active: false, phase: 1, patT: 2, attackIndex: 0, charge: 0, cvx: 0, cvy: 0 };
@@ -122,6 +125,7 @@ export function enterSagaZone(g: Game, ri: number, zi: number) {
   }
   startSagaMode(g, r, ri, zi, zn, data);
   g.discoveries.add(`saga:${r.id}:${zi}`);
+  if (g.echoSystems.caravans.active?.realm === r.id) g.echoSystems.caravans.active.arrivalVerified = true;
   g.biomeBanner = { name: `✦ ${r.name} · ${zn.name} · Nv ${zoneLevel(r, zi)}+`, t: 5 };
   g.toast(zn.lore, zn.color);
   if (zi === 0) play(g, { id: `saga_pro_${r.id}`, trigger: 'saga', title: r.subtitle, lines: r.prologue });
@@ -136,8 +140,18 @@ export function sagaVictoryLines(zn: SagaZone) {
   return victory.length ? victory : [`${zn.name} recupera seu ritmo. A cidade abre o caminho sem exigir que ninguém se perca.`];
 }
 export function sagaOnBoss(g: Game, id: string) {
+  let echoStateChanged = false;
   for (const [ri, r] of SAGA_REALMS.entries()) for (const [i, zn] of r.zones.entries()) {
     if (sagaBossId(r, i) !== id) continue;
+    if (r.gate === 'ecos') {
+      const memoryKey = `dream:memory:${id}`;
+      if (!g.discoveries.has(memoryKey)) {
+        g.discoveries.add(memoryKey);
+        g.echoSystems.dreams.memories = Math.min(9, g.echoSystems.dreams.memories + 1);
+        echoStateChanged = true;
+        g.toast('Memória de Eco coletada. Use-a numa Expedição Onírica em Ecos Além.', '#bfefff');
+      }
+    }
     play(g, { id: `saga_win_${r.id}_${i}`, trigger: 'saga', title: `${r.name} · ${zn.name}`, lines: sagaVictoryLines(zn) });
     if (i === r.zones.length - 1) {
       play(g, { id: `saga_epi_${r.id}`, trigger: 'saga', title: `${r.name} · Epílogo`, lines: r.epilogue });
@@ -148,6 +162,14 @@ export function sagaOnBoss(g: Game, id: string) {
       } else if (r.gate === 'atos') {
         g.toast('✦ O Mapa dos Atos registra esta história. Outros reinos se abrirão quando a campanha principal avançar.', '#c8dcff');
       } else if (r.gate === 'ecos') {
+        if (!g.echoSystems.restoration.freedRealms.includes(r.id)) {
+          g.echoSystems.restoration.freedRealms.push(r.id);
+          g.echoSystems.restoration.level = Math.min(3, g.echoSystems.restoration.freedRealms.length);
+          if (!g.echoSystems.cartography.routes.includes(r.id)) g.echoSystems.cartography.routes.push(r.id);
+          g.discoveries.add(`potos:restored:${r.id}`);
+          echoStateChanged = true;
+          g.toast(`Potos muda: moradores de ${r.name} retornam, uma loja abre e uma rota é traçada no Atlas.`, '#a0ffa0');
+        }
         g.toast('✦ Ecos Além guarda esta cidade. O próximo horizonte já pode ser escolhido no Mapa dos Atos.', '#e4b8ff');
       } else {
         const next = ORACLE_REALMS[ri + 1];
@@ -155,6 +177,7 @@ export function sagaOnBoss(g: Game, id: string) {
       }
     } else g.toast(`O caminho para ${r.zones[i + 1]!.name} está aberto.`, '#a0ffa0');
   }
+  if (echoStateChanged) g.save();
 }
 
 /* ───────────── Contagem de abates por reino ───────────── */

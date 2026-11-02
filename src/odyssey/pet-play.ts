@@ -42,18 +42,22 @@ export function evoCtx(g: Game): EvoCtx { return { time: isNight(g) ? "noite" : 
 
 /** Multiplicador do dano recebido pelo herói (pets tanque e o escudo Muralha). */
 export function petGuardMult(g: Game): number {
-  const pet = activePet(g); if (!pet) return 1;
+  const linked = g.echoSystems.bonds.unlocked && petsOf(g).team.length >= 2;
+  const pet = activePet(g); if (!pet) return linked ? 0.92 : 1;
   const sp = SPECIES_BY_ID[pet.species], f = fightMult(pet); if (!sp || f <= 0) return 1;
   let m = 1;
   if (sp.role === "tanque") m *= 1 - Math.min(0.3, petStats(pet).def / 180) * Math.min(1, f);
   if ((bodies.get(g)?.shieldT ?? 0) > 0) m *= 0.75;
+  if (linked) m *= 0.92;
   return m;
 }
 /** Multiplicador do dano causado (pets de suporte). */
 export function petDamageMult(g: Game): number {
-  const pet = activePet(g); if (!pet) return 1;
-  const sp = SPECIES_BY_ID[pet.species]; if (!sp || sp.role !== "suporte") return 1;
-  return 1 + Math.min(0.25, petStats(pet).atk / 160) * Math.min(1, fightMult(pet));
+  const linked = g.echoSystems.bonds.unlocked && petsOf(g).team.length >= 2;
+  const pet = activePet(g);
+  const sp = pet ? SPECIES_BY_ID[pet.species] : undefined;
+  const support = pet && sp?.role === "suporte" ? 1 + Math.min(0.25, petStats(pet).atk / 160) * Math.min(1, fightMult(pet)) : 1;
+  return support * (linked ? 1.08 : 1);
 }
 
 type Foe = Game["enemies"][number];

@@ -158,8 +158,8 @@ function land(g: Game, id: string) {
   const bossIds: number[] = [];
   const bx = b.center.x - Math.cos(arriveA) * (b.span * TS * 0.18), by = b.center.y - Math.sin(arriveA) * (b.span * TS * 0.18);
   const boss = g.makeEnemy(def.boss.kind, bx, by, enemyLevel(def.base as never, def.boss.kind) + def.tier * 4 + 2);
-  // Mantém a escala global de boss, mas reduz o HP final das ilhas para um terço.
-  const baseHp = boss.maxhp * def.boss.hp / 3;
+  // Escala a base da ilha uma única vez; chefes marítimos seguem o mesmo 5× global.
+  const baseHp = boss.maxhp * def.boss.hp;
   boss.hp = boss.maxhp = bossHp(baseHp); boss.atk = Math.round(boss.atk * 1.5); boss.elite = true; boss.xp *= 12; boss.gold *= 10;
   boss.boss = islandBossState(def, boss, baseHp);
   enemies.push(boss); bossId = boss.id; bossIds.push(boss.id);

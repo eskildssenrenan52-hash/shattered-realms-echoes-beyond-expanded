@@ -1,14 +1,22 @@
-// Marcos gerados por IA para os reinos que ganharam arte própria.
-// URLs em Storage são duráveis no projeto; o renderer ignora a imagem até ela estar carregada.
+// Marcos locais: o Vite copia estas imagens para o bundle web e para o APK offline.
+import relicarioUrl from '@/assets/realm-marcos/runtime/relicario.webp';
+import origamiaUrl from '@/assets/realm-marcos/runtime/origamia.webp';
+import leviataUrl from '@/assets/realm-marcos/runtime/leviata.webp';
+import brumavaleUrl from '@/assets/realm-marcos/runtime/brumavale.webp';
+import nimbariaUrl from '@/assets/realm-marcos/runtime/nimbaria.webp';
+import ereboUrl from '@/assets/realm-marcos/runtime/erebo.webp';
+import lunarisUrl from '@/assets/realm-marcos/runtime/lunaris.webp';
+import coroaUrl from '@/assets/realm-marcos/runtime/coroa.webp';
+
 const SOURCES: Record<string, string> = {
-  relicario: '/manus-storage/async-images/5K90SWP5CEG2wAwH9sb69T/image-1.webp',
-  origamia: '/manus-storage/async-images/5K90SWP5CEG2wAwH9sb69T/image-2.webp',
-  leviata: '/manus-storage/async-images/5K90SWP5CEG2wAwH9sb69T/image-3.webp',
-  brumavale: '/manus-storage/async-images/5K90SWP5CEG2wAwH9sb69T/image-4.webp',
-  nimbaria: '/manus-storage/async-images/5K90SWP5CEG2wAwH9sb69T/image-5.webp',
-  erebo: '/manus-storage/async-images/eRI804cIR8OFKJWL30BXsQ/image-1.webp',
-  lunaris: '/manus-storage/async-images/eRI804cIR8OFKJWL30BXsQ/image-2.webp',
-  coroa: '/manus-storage/async-images/eRI804cIR8OFKJWL30BXsQ/image-3.webp',
+  relicario: relicarioUrl,
+  origamia: origamiaUrl,
+  leviata: leviataUrl,
+  brumavale: brumavaleUrl,
+  nimbaria: nimbariaUrl,
+  erebo: ereboUrl,
+  lunaris: lunarisUrl,
+  coroa: coroaUrl,
 };
 
 const art = new Map<string, HTMLImageElement>();

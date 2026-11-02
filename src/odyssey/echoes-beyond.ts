@@ -81,14 +81,14 @@ export const ECHOES_BEYOND_CHRONICLES: BeyondChronicle[] = Array.from({ length: 
 });
 
 export const AMBITIOUS_SYSTEMS = [
-  ['cartografia-viva', 'Cartografia viva de Vésper', 'Rotas e segredos visíveis conforme o Atlas é explorado.'],
-  ['potos-reconstruida', 'Reconstrução de Potos', 'Cidadãos, lojas e atalhos retornam com reinos libertos.'],
-  ['lacos-eco', 'Laços de Eco', 'Companheiros com cenas e combinações de habilidade.'],
-  ['conselho', 'Conselho dos Reinos', 'Decisões entre facções alteram missões, preços e epílogos.'],
-  ['sonhos', 'Expedições oníricas', 'Masmorras mutáveis acessadas por memórias encontradas.'],
-  ['constelacoes', 'Rituais de constelação', 'Puzzles de céu, mar e som revelam novos segredos.'],
-  ['caravanas', 'Caravanas', 'Pedidos de cidades restauram rotas e melhorias visíveis.'],
-  ['museu', 'Museu das Canções Perdidas', 'Relíquias abrem cenas, desafios e versões alternativas.'],
-  ['tempestades', 'Tempestades de Fratura', 'Eventos mundiais opt-in com chefes raros.'],
-  ['ciclo-alem', 'Novo Ciclo: Ecos Além', 'Pós-campanha com escolhas persistentes e finais de reinos.'],
+  ['cartografia-viva', 'Cartografia viva de Vésper', 'Explorações, escolhas e ilhas alimentam rotas registradas no Atlas com viagem rápida segura.'],
+  ['potos-reconstruida', 'Reconstrução de Potos', 'Moradores e uma mercadora retornam; cada reino liberto amplia a cidade e melhora os preços.'],
+  ['lacos-eco', 'Laços de Eco', 'Pets de elementos diferentes podem despertar uma cena de lealdade e uma combinação passiva de ataque/guarda.'],
+  ['conselho', 'Conselho dos Reinos', 'Três votações persistentes alteram reputação das facções, preço de loja e pontuação de finais.'],
+  ['sonhos', 'Expedições oníricas', 'Memórias de chefes abrem masmorras curtas procedurais com guardião, recompensa e progressão salva.'],
+  ['constelacoes', 'Rituais de constelação', 'Três sequências de céu, mar e som registram uma rota estelar alternativa ao Coração Oculto.'],
+  ['caravanas', 'Caravanas', 'Encomendas usam ouro/tábuas, exigem visita ao destino e devolução em Potos para abrir rotas.'],
+  ['museu', 'Museu das Canções Perdidas', 'Relíquias liberam cenas; a curadoria preserva ou liberta a lembrança, com escolha persistente.'],
+  ['tempestades', 'Tempestades de Fratura', 'Eventos opt-in instanciados distorcem uma região, geram cache e Arauto raro sem interromper outros jogadores.'],
+  ['ciclo-alem', 'Novo Ciclo: Ecos Além', 'Cinco desfechos persistentes reabrem os reinos e modificam escala e recompensas dos chefes.'],
 ] as const;

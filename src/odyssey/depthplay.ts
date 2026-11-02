@@ -25,7 +25,7 @@ import { SIEGE_PORTAL } from './siege';
 
 for (const [i, r] of ALL_REALMS.entries()) ITEMS[r.relic] ??= { id: r.relic, name: r.relicName, type: 'amulet', bonus: { str: 4 + i * 2, int: 4 + i * 2, vit: 3 + i * 2, hp: 60 + i * 40, mp: 30 + i * 20 }, desc: `Relíquia oculta do ${r.name}.`, color: r.color, price: 2000 + i * 1500 };
 
-export interface DepthState { kind: 'abyss' | 'temple' | 'tutorial'; profile?: 'citadel' | 'siege'; floor: number; temple?: Temple; data: DungeonFloor; stair: StairStyle }
+export interface DepthState { kind: 'abyss' | 'temple' | 'tutorial' | 'dream' | 'storm'; profile?: 'citadel' | 'siege' | 'dream' | 'storm'; floor: number; temple?: Temple; data: DungeonFloor; stair: StairStyle }
 
 export const ABYSS_KEEPER: NpcDef = { id: 'abyss_keeper', name: 'Guardião do Abismo', title: 'Vigia dos Cem Andares', tx: ABYSS_DOOR.tx, ty: ABYSS_DOOR.ty, pal: { skin: '#d8c8b8', hair: '#3a2a5a', body: '#2a1a40', legs: '#120a20', accent: '#c78bff' }, lines: [] };
 export const CITADEL_KEEPER: NpcDef = { id: 'citadel_keeper', name: 'Sentinela de Gehenna', title: 'Guardiã da Estrada ao Trono', tx: CITADEL_DOOR.tx, ty: CITADEL_DOOR.ty, pal: { skin: '#b8a0a0', hair: '#201020', body: '#7a2028', legs: '#301018', accent: '#ff7050' }, lines: [] };
@@ -33,6 +33,7 @@ const ABYSS_STAIRS: StairStyle[] = ['roots', 'fungal', 'marble', 'coral', 'sand'
 
 /** Tutorial inicial: uma rota curta que ensina os controles sem misturar o progresso do Abismo. */
 export const TUTORIAL_BOSS_ID = 'tutorial_gatekeeper';
+export const TUTORIAL_FLOORS = 6;
 export const TUTORIAL_BOSS_LOOK: Record<string, { kind: 'golem'; tint: string; scale: number }> = { [TUTORIAL_BOSS_ID]: { kind: 'golem', tint: '#7ed6ff', scale: 2.35 } };
 const TUTORIAL_THEME: Theme = {
   name: 'Cripta do Primeiro Eco', floor: T.CAVE, wall: T.CWALL, deco: T.CRYSTAL, biome: 'cave',
@@ -44,10 +45,12 @@ export function tutorialBoss(tx: number, ty: number): BossDef {
 }
 
 export function tutorialFloorData(floor: number): DungeonFloor {
-  const data = generateFloor(floor, { theme: TUTORIAL_THEME, seed: 9317 + floor * 177, size: { w: 36, h: 27 }, level: Math.max(1, floor), idPrefix: `tutorial-${floor}`, eliteBonus: 0 });
-  const count = floor === 1 ? 4 : floor === 2 ? 6 : 4;
+  const data = generateFloor(floor, { theme: TUTORIAL_THEME, seed: 9317 + floor * 177, size: { w: 58, h: 42 }, level: Math.max(1, floor), idPrefix: `tutorial-${floor}`, eliteBonus: 0 });
+  const count = [0, 4, 5, 3, 3, 4, 2][floor] ?? 3;
   data.spawns = data.spawns.slice(0, count).map((s) => ({ ...s, level: Math.max(1, Math.min(3, s.level)), elite: false }));
-  if (floor === 3) data.boss = tutorialBoss(data.stairs.tx, data.stairs.ty - 2);
+  if (floor === 3) data.chests.push({ id: 'tutorial-3-supply', tx: data.start.tx + 2, ty: data.start.ty + 1, gold: 24, item: 'hi_potion', qty: 2 });
+  if (floor === 5) data.chests.push({ id: 'tutorial-5-ether', tx: data.start.tx + 2, ty: data.start.ty + 1, gold: 12, item: 'ether', qty: 2 });
+  if (floor === TUTORIAL_FLOORS) data.boss = tutorialBoss(data.stairs.tx, data.stairs.ty - 2);
   return data;
 }
 
@@ -102,18 +105,31 @@ function enter(g: Game, state: DepthState, strength: number) {
 }
 
 export function enterTutorialFloor(g: Game, floor: number) {
-  floor = Math.max(1, Math.min(3, floor));
+  floor = Math.max(1, Math.min(TUTORIAL_FLOORS, floor));
   enter(g, { kind: 'tutorial', floor, data: tutorialFloorData(floor), stair: 'crystal' }, 1);
   g.tutorialActive = true;
   g.tutorialFloor = floor;
+  g.tutorialRevision++;
+  g.tutorialPauseInput = true;
+  g.keys.clear(); g.mouse.down = false; g.moveTarget = null; g.targetEnemy = null;
   g.p.hp = g.maxHp(); g.p.mp = g.maxMp();
   g.audio.boss = false;
-  g.biomeBanner = { name: `Treino de Aventureiro · Andar ${floor}/3`, t: 4 };
-  g.toast(floor === 1 ? 'Aprenda a se mover e atacar. A escada só abre quando a sala estiver segura.' : floor === 2 ? 'Use poções, éter e magia. Posicionamento também é defesa.' : 'O Guardião aguarda no terceiro andar. Gaste seus pontos de atributo quando subir de nível.', '#bfefff');
+  g.biomeBanner = { name: `Treino de Aventureiro · Andar ${floor}/${TUTORIAL_FLOORS}`, t: 4 };
+  const advice = [
+    '',
+    'Explore a sala: mova-se, olhe o HUD e experimente um ataque antes de seguir.',
+    'Leia a distância do inimigo. Recue dos golpes e volte a atacar quando houver espaço.',
+    'Procure o baú de suprimentos; chegue perto e pressione E para abrir.',
+    'Observe HP e MP. Poções recuperam vida; éter recupera mana para suas habilidades.',
+    'Teste uma magia do grimório e confira como habilidades gastam mana.',
+    'O Guardião espera no último piso. Observe os avisos, desvie e aproveite a abertura para atacar.',
+  ] as const;
+  g.toast(advice[floor]!, '#bfefff');
 }
 
 export function startTutorial(g: Game) {
   g.tutorialActive = true;
+  g.tutorialPauseInput = true;
   g.tutorialDone = false;
   g.tutorialModalPending = false;
   g.tutorialModalDone = false;
@@ -124,6 +140,8 @@ export function startTutorial(g: Game) {
 export function skipTutorial(g: Game) {
   if (g.depth?.kind === 'tutorial') leaveDepth(g, true);
   g.tutorialActive = false;
+  g.tutorialPauseInput = true;
+  g.keys.clear(); g.mouse.down = false; g.moveTarget = null; g.targetEnemy = null;
   g.tutorialDone = true;
   g.tutorialFloor = 0;
   g.tutorialModalPending = true;
@@ -136,6 +154,8 @@ export function skipTutorial(g: Game) {
 export function completeTutorial(g: Game) {
   if (g.depth?.kind === 'tutorial') leaveDepth(g, true);
   g.tutorialActive = false;
+  g.tutorialPauseInput = true;
+  g.keys.clear(); g.mouse.down = false; g.moveTarget = null; g.targetEnemy = null;
   g.tutorialDone = true;
   g.tutorialFloor = 0;
   g.tutorialModalPending = true;
@@ -147,7 +167,7 @@ export function completeTutorial(g: Game) {
 }
 
 export function restartTutorialFloor(g: Game) {
-  const floor = Math.max(1, Math.min(3, g.tutorialFloor || 1));
+  const floor = Math.max(1, Math.min(TUTORIAL_FLOORS, g.tutorialFloor || 1));
   if (g.depth?.kind === 'tutorial') leaveDepth(g, true);
   enterTutorialFloor(g, floor);
 }
@@ -217,6 +237,8 @@ export function enterRealm(g: Game, r: RealmDef) {
 export function leaveDepth(g: Game, silent = false) {
   if (!g.depth) return;
   if (g.depth.profile === 'siege') onSiegeLeave(g);
+  if (g.depth.profile === 'storm') g.echoSystems.storms.active = false;
+  if (g.depth.kind === 'dream') g.echoSystems.dreams.activeRun = null;
   g.depth = null; g.world = g.overworld; g.enemies = g.surfaceEnemies; g.surfaceEnemies = [];
   g.activeBoss = null; g.audio.boss = false;
   g.p.x = g.depthReturn.x; g.p.y = g.depthReturn.y;
@@ -243,7 +265,7 @@ export function tutorialDepthAction(g: Game, run: boolean): string {
   }
   if (near(g, data.stairs.tx, data.stairs.ty, 22)) {
     const remaining = g.enemies.some((e) => e.alive);
-    if (d.floor < 3) {
+    if (d.floor < TUTORIAL_FLOORS) {
       if (remaining) { if (run) g.toast('A escada está selada. Derrote todos os inimigos deste andar.', '#ffb060'); return 'Escada selada · derrote os inimigos'; }
       if (run) enterTutorialFloor(g, d.floor + 1);
       return `E · Ir para o andar ${d.floor + 1}`;
@@ -252,7 +274,7 @@ export function tutorialDepthAction(g: Game, run: boolean): string {
     if (run) completeTutorial(g);
     return 'E · Entrar nas Terras de Mana';
   }
-  if (d.floor === 1 && near(g, data.start.tx, data.start.ty, 20)) return 'Treino ativo · use o botão Pular tutorial se quiser sair';
+  if (d.floor === 1 && near(g, data.start.tx, data.start.ty, 20)) return 'Treino ativo · use o botão Pular treino se quiser sair';
   return '';
 }
 
@@ -276,12 +298,48 @@ function citadelDepthAction(g: Game, run: boolean): string {
   return '';
 }
 
+/** Expedições de Ecos Além compartilham o gerador, mas mantêm saída e recompensa próprias. */
+function echoDepthAction(g: Game, run: boolean): string {
+  const d = g.depth; if (!d || (d.kind !== 'dream' && d.kind !== 'storm')) return '';
+  const data = d.data;
+  for (const c of data.chests) if (near(g, c.tx, c.ty)) {
+    if (run) g.claimChest(c.id, c.gold, c.item, c.qty, d.kind === 'dream' ? 'Baú de uma lembrança' : 'Cache da Fratura');
+    return g.openedChests.has(c.id) ? 'Baú vazio' : 'E · Abrir baú';
+  }
+  if (near(g, data.start.tx, data.start.ty, 20)) {
+    if (run) leaveDepth(g);
+    return d.kind === 'dream' ? 'E · Abandonar o sonho e voltar' : 'E · Sair da Fenda (evento encerrado)';
+  }
+  if (near(g, data.stairs.tx, data.stairs.ty, 22)) {
+    if (d.kind === 'dream') {
+      const remaining = g.enemies.some((enemy) => enemy.alive);
+      if (remaining) { if (run) g.toast('O sonho ainda está preso. Derrote as sombras e o guardião antes de sair.', '#ffb060'); return 'Escada selada · derrote os inimigos'; }
+      if (run) {
+        const gold = 220 + g.p.level * 12;
+        g.echoSystems.dreams.completed++;
+        g.echoSystems.dreams.best = Math.max(g.echoSystems.dreams.best, d.floor);
+        g.echoSystems.dreams.memories = Math.min(9, g.echoSystems.dreams.memories + 1);
+        g.p.gold += gold; g.gainXp(80 + g.p.level * 8); g.addItem('eco_shard');
+        g.toast(`Memória recuperada: +${gold} ouro · XP · Fragmento de Eco.`, '#bfefff');
+        g.audio.sfx('level'); leaveDepth(g);
+      }
+      return 'E · Levar a memória de volta a Potos';
+    }
+    const boss = data.boss, locked = !!boss && !g.bossesDone.has(boss.id);
+    if (locked) { if (run) g.toast(`${boss!.name} sela a Fenda. Derrote-o para estabilizar a região.`, '#d8a0ff'); return 'Fenda instável · derrote o Arauto'; }
+    if (run) leaveDepth(g);
+    return 'E · Dissipar a Tempestade e voltar';
+  }
+  return '';
+}
+
 /** Interação dentro das profundezas: escadas, baús e relíquias. Retorna o texto do aviso ou executa. */
 export function depthAction(g: Game, run: boolean): string {
   const d = g.depth; if (!d) return '';
   const data = d.data;
   if (d.profile === 'siege') return siegeDepthAction(g, run);
   if (d.kind === 'tutorial') return tutorialDepthAction(g, run);
+  if (d.kind === 'dream' || d.kind === 'storm') return echoDepthAction(g, run);
   if (d.profile === 'citadel') return citadelDepthAction(g, run);
   const sg = sagaDepthAction(g, run); if (sg) return sg;
   const sec = secretDepthAction(g, run); if (sec) return sec;
@@ -342,10 +400,22 @@ export function drawDepth(g: Game, c: CanvasRenderingContext2D, x0: number, y0: 
     for (const t of data.torches) if (vis(t.tx, t.ty)) drawWallTorch(c, t.tx, t.ty, wt);
     return;
   }
+  if (d.kind === 'dream' || d.kind === 'storm') {
+    drawStairs(c, d.stair, data.start.tx, data.start.ty, false, wt);
+    const locked = d.kind === 'dream' ? g.enemies.some((enemy) => enemy.alive) : !!data.boss && !g.bossesDone.has(data.boss.id);
+    drawStairs(c, d.stair, data.stairs.tx, data.stairs.ty, true, wt, locked);
+    if (d.kind === 'storm' && vis(data.stairs.tx, data.stairs.ty)) {
+      c.save(); c.globalCompositeOperation = 'lighter'; c.globalAlpha = 0.28 + Math.sin(wt * 4) * 0.08; c.strokeStyle = '#d080ff'; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(data.stairs.tx * TS + 8, data.stairs.ty * TS + 8, 22 + Math.sin(wt * 2) * 2, 13, wt * 0.2, 0, Math.PI * 2); c.stroke(); c.restore();
+    }
+    for (const ch of data.chests) if (vis(ch.tx, ch.ty)) drawTreasure(c, ch.tx * TS + 8, ch.ty * TS + 12, g.openedChests.has(ch.id), wt);
+    for (const t of data.torches) if (vis(t.tx, t.ty)) drawWallTorch(c, t.tx, t.ty, wt);
+    return;
+  }
   if (drawSagaStairs(g, c, wt)) { for (const ch of data.chests) if (vis(ch.tx, ch.ty)) drawTreasure(c, ch.tx * TS + 8, ch.ty * TS + 12, g.openedChests.has(ch.id), wt); for (const t of data.torches) if (vis(t.tx, t.ty)) drawWallTorch(c, t.tx, t.ty, wt); return; }
   drawStairs(c, d.stair, data.start.tx, data.start.ty, false, wt);
   if ((d.kind === 'abyss' && d.floor < ABYSS_FLOORS) || d.kind === 'tutorial') drawStairs(c, d.stair, data.stairs.tx, data.stairs.ty, true, wt, d.kind === 'tutorial' ? g.enemies.some((e) => e.alive) : !!data.boss && !g.bossesDone.has(data.boss.id));
-  if ((d.kind === 'temple' && d.profile !== 'citadel') || d.floor >= ABYSS_FLOORS) drawTreasure(c, data.stairs.tx * TS + 8, data.stairs.ty * TS + 12, g.openedChests.has(`${d.temple?.id}-relic`), wt);
+  if (d.kind === 'temple' || d.floor >= ABYSS_FLOORS) drawTreasure(c, data.stairs.tx * TS + 8, data.stairs.ty * TS + 12, g.openedChests.has(`${d.temple?.id}-relic`), wt);
   for (const ch of data.chests) if (vis(ch.tx, ch.ty)) drawTreasure(c, ch.tx * TS + 8, ch.ty * TS + 12, g.openedChests.has(ch.id), wt);
   for (const t of data.torches) if (vis(t.tx, t.ty)) drawWallTorch(c, t.tx, t.ty, wt);
 }
@@ -354,14 +424,16 @@ export function drawDepth(g: Game, c: CanvasRenderingContext2D, x0: number, y0: 
 export function depthLights(g: Game, hole: (x: number, y: number, r: number, a?: number) => void, glows: { x: number; y: number; r: number; col: string }[], wt: number) {
   const d = g.depth; if (!d || d.profile === 'siege') return;
   const torch = hasTorch(g);
-  hole(g.p.x, g.p.y - 8, (torch ? 96 : d.profile === 'citadel' ? 84 : 34) + Math.sin(wt * 9) * 3);
+  hole(g.p.x, g.p.y - 8, (torch ? 96 : d.profile === 'citadel' ? 84 : d.profile === 'storm' ? 58 : d.profile === 'dream' ? 72 : 34) + Math.sin(wt * 9) * 3);
   if (torch) glows.push({ x: g.p.x, y: g.p.y - 10, r: 46, col: 'rgba(255,150,60,0.22)' });
   if (d.profile === 'citadel') glows.push({ x: d.data.stairs.tx * TS + 8, y: d.data.stairs.ty * TS + 8, r: 68, col: 'rgba(255,76,40,0.28)' });
+  if (d.profile === 'storm') glows.push({ x: d.data.stairs.tx * TS + 8, y: d.data.stairs.ty * TS + 8, r: 72, col: 'rgba(208,128,255,0.28)' });
+  if (d.profile === 'dream') glows.push({ x: d.data.stairs.tx * TS + 8, y: d.data.stairs.ty * TS + 8, r: 58, col: 'rgba(128,216,255,0.22)' });
   for (const t of d.data.torches) { hole(t.tx * TS + 8, t.ty * TS + 6, 64 + Math.sin(wt * 7 + t.tx) * 3, 0.95); glows.push({ x: t.tx * TS + 8, y: t.ty * TS + 4, r: 34, col: 'rgba(255,140,50,0.32)' }); }
   hole(d.data.start.tx * TS + 8, d.data.start.ty * TS + 8, 30, 0.6);
   propLights(g, hole, glows, wt);
   secretLights(g, hole); sagaLights(g, hole);
 }
-export const depthDarkness = (g: Game) => g.depth?.profile === 'siege' ? 0 : g.depth?.profile === 'citadel' ? 0.42 : sagaDarkness(g) ?? (isRealm(g.depth?.temple) ? 0.72 : g.depth?.kind === 'temple' ? 0.95 : 0.9);
+export const depthDarkness = (g: Game) => g.depth?.profile === 'siege' ? 0 : g.depth?.profile === 'citadel' ? 0.42 : g.depth?.profile === 'dream' ? 0.46 : g.depth?.profile === 'storm' ? 0.56 : sagaDarkness(g) ?? (isRealm(g.depth?.temple) ? 0.72 : g.depth?.kind === 'temple' ? 0.95 : 0.9);
 
 setSagaLeave((g) => leaveDepth(g));

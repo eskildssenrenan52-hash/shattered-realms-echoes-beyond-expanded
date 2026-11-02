@@ -30,15 +30,16 @@ import { AppearancePanel } from "@/components/AppearancePanel";
 import { epicTick, epicNewGame } from "@/odyssey/epic-play";
 import { petsNewGame } from "@/odyssey/pet-play";
 import { PetsPanel } from "@/components/PetsPanel";
+import { EchoesBeyondPanel } from "@/components/EchoesBeyondPanel";
 import { drawKIcon, kImage } from "@/odyssey/kaetram";
 import { PawPrint } from "lucide-react";
-import { skipTutorial, startTutorial } from "@/odyssey/depthplay";
+import { skipTutorial, startTutorial, TUTORIAL_FLOORS } from "@/odyssey/depthplay";
 import { skipBossCard } from "@/odyssey/live-scenes";
 import { ISLANDS, bestBoat } from "@/odyssey/archipelago";
 import { ALL_REALMS, realmOpen } from "@/odyssey/secrets";
 import { SAGA_REALMS, actRealmUnlocked, sagaBossId } from "@/odyssey/saga";
 import { sagaModeStatus, sagaPlaza, travelToActMap } from "@/odyssey/saga-play";
-import { AMBITIOUS_SYSTEMS, ECHOES_BEYOND_CHRONICLES } from "@/odyssey/echoes-beyond";
+import { ECHOES_BEYOND_CHRONICLES } from "@/odyssey/echoes-beyond";
 
 export const Route = createFileRoute("/odyssey")({
   head: () => ({
@@ -55,7 +56,7 @@ export const Route = createFileRoute("/odyssey")({
   component: OdysseyScreen,
 });
 
-type Panel = null | "inv" | "char" | "quest" | "map" | "secrets" | "workshop" | "build" | "farm" | "home" | "chronicle" | "bestiary" | "grimoire" | "epic" | "pets";
+type Panel = null | "inv" | "char" | "quest" | "map" | "secrets" | "workshop" | "build" | "farm" | "home" | "chronicle" | "bestiary" | "grimoire" | "epic" | "pets" | "echoes";
 
 function Icon({ id, size = 32 }: { id: string; size?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -144,7 +145,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
       if (document.hidden) return;
       const dt = Math.min(0.05, Math.max(0, raw) / 1000);
       try {
-        g.paused = panelRef.current !== null;
+        g.paused = panelRef.current !== null || g.tutorialPauseInput;
         g.update(dt);
         if (firstFrame || g.quality.shouldRender()) { firstFrame = false; g.render(); }
         if (raw < 250) g.quality.sample(raw);
@@ -172,6 +173,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
     let hud = 0; const iv = setInterval(() => { if (document.hidden) return; hud++; if (g.started && hud % 4 === 0) epicTick(g); if (g.tutorialModalPending) setTutorialMode("modals"); if (hud % g.quality.hudEvery() === 0) setTick((x) => x + 1); }, 120);
     const down = (e: KeyboardEvent) => {
       if (!g.started) return;
+      if (g.tutorialPauseInput) { e.preventDefault(); return; }
       g.audio.init();
       if (g.live || g.bossCard) { if (g.bossCard && (e.code === "Enter" || e.code === "Space" || e.code === "Escape")) { e.preventDefault(); skipBossCard(g); } return; }
       if (g.cutscene) {
@@ -208,6 +210,20 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
   }, []);
 
   const g = gameRef.current;
+  const clearTutorialInput = (game: Game) => { game.keys.clear(); game.mouse.down = false; game.moveTarget = null; game.targetEnemy = null; game.talkTarget = null; };
+  const openGuide = () => {
+    const game = gameRef.current;
+    if (!game?.started) return;
+    game.tutorialPauseInput = true; clearTutorialInput(game); game.tutorialModalPending = true; game.save();
+    setPanel(null); setMenuOpen(false); setTutorialMode("modals");
+  };
+  const closeGuide = () => {
+    const game = gameRef.current;
+    if (!game) return;
+    game.tutorialPauseInput = false; game.tutorialDone = true; game.tutorialFloor = 0;
+    game.tutorialModalPending = false; game.tutorialModalDone = true; clearTutorialInput(game); game.save();
+    setTutorialMode("none"); setPanel("quest");
+  };
   const start = (load: boolean) => {
     const game = gameRef.current;
     if (!game) return;
@@ -218,8 +234,9 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
       if (!game.tutorialDone) { startTutorial(game); setTutorialMode("dungeon"); setPanel(null); }
       else { setPanel("quest"); game.toast("Fale com Gorm na vila ou comece seu lar na clareira a leste.", "#ffd040"); }
     } else {
-      setPanel(game.tutorialModalPending ? null : "quest");
-      if (game.tutorialModalPending) setTutorialMode("modals");
+      if (!game.tutorialDone) { startTutorial(game); setTutorialMode("dungeon"); setPanel(null); }
+      else if (game.tutorialModalPending) { game.tutorialPauseInput = true; setPanel(null); setTutorialMode("modals"); }
+      else { game.tutorialPauseInput = false; setPanel("quest"); }
     }
   };
   startRef.current = start;
@@ -229,7 +246,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
     return () => window.clearTimeout(timer);
   }, [startImmediately]);
   const onMouse = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!g || !g.started) return;
+    if (!g || !g.started || g.tutorialPauseInput) return;
     e.preventDefault();
     if (g.live || g.bossCard) { skipBossCard(g); return; }
     const r = e.currentTarget.getBoundingClientRect();
@@ -317,8 +334,8 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
               <Modal title={g.openStation === "smith" ? "⚒ Forja de Brunhild" : g.openStation === "alchemist" ? "Alquimia de Lira" : g.openStation === "carpenter" ? "Carpintaria" : "Mercado"} onClose={() => (g.openStation = null)}>
                 {g.openStation === "shop" ? (
                   <div className="modal-cols">
-                    <Section title="Comprar" aside={`${p.gold}g`}><div className="row-list">{SHOP.map((id) => <Row key={id} id={id} right={`${ITEMS[id].price}g`} onClick={() => g.buy(id)} />)}</div></Section>
-                    <Section title="Vender" aside={`${g.inventory.length} itens`}><div className="row-list">{g.inventory.length ? g.inventory.map((s, i) => <Row key={i} id={s.id} qty={s.qty} right={`+${Math.max(1, Math.floor(ITEMS[s.id].price / 2))}g`} onClick={() => g.sell(i)} />) : <div className="modal-empty">Sua mochila está vazia.</div>}</div></Section>
+                    <Section title="Comprar" aside={`${p.gold}g`}><div className="row-list">{SHOP.map((id) => <Row key={id} id={id} right={`${Math.max(1, Math.round(ITEMS[id].price * g.priceMult()))}g`} onClick={() => g.buy(id)} />)}</div></Section>
+                    <Section title="Vender" aside={`${g.inventory.length} itens`}><div className="row-list">{g.inventory.length ? g.inventory.map((s, i) => <Row key={i} id={s.id} qty={s.qty} right={`+${Math.max(1, Math.floor(ITEMS[s.id].price * Math.max(0.65, Math.min(1.25, 2 - g.priceMult())) / 2))}g`} onClick={() => g.sell(i)} />) : <div className="modal-empty">Sua mochila está vazia.</div>}</div></Section>
                   </div>
                 ) : (
                   <Section title="Receitas" aside="Itens em vermelho ainda faltam"><div className="row-list">{g.recipes(g.openStation).map((r, i) => {
@@ -387,9 +404,9 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
                 {actRealmUnlocked(5, g.questStatus) && <>
                   <div className="modal-section-title mt-3"><span>Ecos Além — 120 crônicas</span><small>pós-Ato V</small></div>
                   <details className="game-panel p-2 text-[11px]"><summary className="cursor-pointer text-primary">Abrir o arquivo das cidades-reinos</summary><div className="row-list mt-2">{ECHOES_BEYOND_CHRONICLES.map((chapter) => <div key={chapter.id} className="place-row"><span>{chapter.title}</span><small className="opacity-70">{chapter.text}</small></div>)}</div></details>
-                  <div className="modal-section-title mt-3"><span>Horizontes de Ecos Além</span><small>{AMBITIOUS_SYSTEMS.length} ideias planejadas</small></div>
-                  <div className="font-body text-sm opacity-70">Estes são próximos sistemas criativos documentados para a expansão; ainda não contam como mecânicas persistentes já desbloqueadas.</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">{AMBITIOUS_SYSTEMS.map(([id, name, text]) => <div key={id} className="game-panel p-2 text-[11px]"><b className="text-primary">{name}</b><div className="opacity-70">{text}</div></div>)}</div>
+                  <div className="modal-section-title mt-3"><span>Ecos Além · sistemas ativos</span><small>progresso persistente</small></div>
+                  <p className="font-body text-sm opacity-70">Cartografia, reconstrução de Potos, Conselho, expedições, caravanas, Museu, Tempestades e Novo Ciclo agora possuem entrada, progresso e consequência salva.</p>
+                  <Button variant="secondary" className="mt-2 w-full" onClick={() => setPanel("echoes")}>Abrir a central dos dez sistemas</Button>
                 </>}
               </Modal>
             )}
@@ -397,6 +414,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
             {panel === "grimoire" && <GrimoirePanel g={g} onClose={() => setPanel(null)} />}
             {panel === "epic" && <EpicPanel g={g} onClose={() => setPanel(null)} />}
             {panel === "pets" && <PetsPanel g={g} onClose={() => setPanel(null)} />}
+            {panel === "echoes" && <EchoesBeyondPanel g={g} onClose={() => setPanel(null)} />}
             {panel === "quest" && <QuestBook g={g} onClose={() => setPanel(null)} />}
             {panel === "map" && (
               <Modal title="Atlas de Mana — continente, ilhas e reinos ocultos" onClose={() => setPanel(null)}>
@@ -446,12 +464,16 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
               <span className="flex gap-2"><Button size="sm" onClick={(e) => { e.stopPropagation(); g.advanceCutscene(); }}>{g.cutscene.i + 1 < g.cutscene.beat.lines.length ? "Continuar" : "Fechar"}<ChevronRight size={14}/></Button></span></div>
           </div>
         )}
-        {g && !title && !liveOn && tutorialMode !== "none" && <TutorialOverlay key={tutorialMode} mode={tutorialMode} g={g}
+        {g && !title && !liveOn && tutorialMode !== "none" && (
+          <div hidden={!!g.cutscene}>
+            <TutorialOverlay key={`${tutorialMode}-${g.tutorialFloor}-${g.tutorialRevision}`} mode={tutorialMode} g={g}
           onSkip={() => {
             if (tutorialMode === "dungeon") { skipTutorial(g); setTutorialMode("modals"); }
-            else { g.tutorialModalPending = false; g.tutorialModalDone = true; g.save(); setTutorialMode("none"); setPanel("quest"); }
+            else closeGuide();
           }}
-          onFinish={() => { g.tutorialModalPending = false; g.tutorialModalDone = true; g.save(); setTutorialMode("none"); setPanel("quest"); }} />}
+            onAcknowledge={() => { g.tutorialPauseInput = false; clearTutorialInput(g); }} onFinish={closeGuide} />
+          </div>
+        )}
         {title && (
           <div className="title-screen absolute inset-0">
             <img src={worldArt} width={1536} height={864} alt="A Árvore de Mana, a vila e seus jardins" className="title-art"/>
@@ -480,7 +502,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
                 <div className="menu-group">Jogo</div>
                 <div className="menu-grid">{([
                   {p:'inv',label:'Mochila',icon:'inv'},{p:'char',label:'Herói',icon:'char'},{p:'quest',label:'Missões',icon:'quest'},{p:'map',label:'Mapa',icon:'map'},
-                  {p:'chronicle',label:'Crônica',icon:'chronicle'},{p:'epic',label:'Grande Crônica',icon:'chronicle'},{p:'bestiary',label:'Bestiário',icon:'bestiary'},{p:'grimoire',label:'Grimório',icon:'secrets'},{p:'secrets',label:'Descobertas',icon:'secrets'},
+                  {p:'chronicle',label:'Crônica',icon:'chronicle'},{p:'epic',label:'Grande Crônica',icon:'chronicle'},{p:'echoes',label:'Ecos Além',icon:'secrets'},{p:'bestiary',label:'Bestiário',icon:'bestiary'},{p:'grimoire',label:'Grimório',icon:'secrets'},{p:'secrets',label:'Descobertas',icon:'secrets'},
                 ] as const).map(it=><button key={it.p} onClick={()=>{setMenuOpen(false);setPanel(it.p);}}><GameIcon name={it.icon as never} size={30}/><span>{it.label}</span></button>)}
                 <Button variant="game" onClick={()=>{setMenuOpen(false);setPanel('pets');}}><PawPrint size={28}/><span>Pets</span></Button><button onClick={()=>{setMenuOpen(false);setHeroTab('look');setPanel('char');}}><span className="menu-emoji" aria-hidden>🎭</span><span>Aparência</span></button></div>
                 <div className="menu-group">Ferramenta · {g.tool==='explore'?'Explorar':g.tool}</div>
@@ -492,6 +514,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
                 </div>
                 <div className="menu-group">Sistema</div>
                 <div className="menu-grid menu-grid-4">
+                  <button onClick={openGuide}><BookOpen size={28}/><span>Guia completo</span></button>
                   <button onClick={()=>{g.save();g.toast('Jornada salva.');setMenuOpen(false);}}><GameIcon name="save" size={28}/><span>Salvar</span></button>
                   <button onClick={()=>g.audio.toggleMute()}><GameIcon name={g.audio.muted?'mute':'sound'} size={28}/><span>Som</span></button>
                   <button onClick={async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{g.toast('A tela cheia não está disponível aqui.');}}}><GameIcon name="fullscreen" size={28}/><span>Tela cheia</span></button>
@@ -504,6 +527,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
       )}
       <footer className="game-toolbar" style={liveOn ? { visibility: "hidden" } : undefined}>
         <Button variant="ghost" size="icon" disabled={title} aria-label="Pets" title="Pets (P)" onClick={()=>setPanel(panel==='pets'?null:'pets')}><PawPrint size={20}/></Button>
+        <Button variant="ghost" size="icon" disabled={title} aria-label="Ecos Além" title="Ecos Além · sistemas da expansão" onClick={()=>setPanel(panel==='echoes'?null:'echoes')}><Sparkles size={20}/></Button>
         <div className="toolbar-actions">{([{p:'inv',icon:Backpack,label:'Inventário'},{p:'char',icon:UserRound,label:'Herói'},{p:'quest',icon:ScrollText,label:'Missões'},{p:'chronicle',icon:BookOpen,label:'Crônica (J)'},{p:'map',icon:Map,label:'Mapa'},{p:'secrets',icon:Compass,label:'Descobertas'},{p:'bestiary',icon:Skull,label:'Bestiário (B)'},{p:'grimoire',icon:Sparkles,label:'Grimório (V)'},{p:'epic',icon:ScrollText,label:'Grande Crônica (O)'}] as const).map(({p:tab,icon:ToolIcon,label})=><Button key={tab} variant="ghost" size="icon" disabled={title} title={label} aria-label={label} onClick={()=>setPanel(panel===tab?null:tab)} className={panel===tab?'text-primary':'text-muted-foreground'}><GameIcon name={tab}/><ToolIcon size={18}/></Button>)}<span className="toolbar-divider"/>{([{id:'explore',icon:Swords,label:'Explorar'},{id:'mine',icon:Pickaxe,label:'Minerar'},{id:'axe',icon:Axe,label:'Cortar madeira'},{id:'till',icon:Shovel,label:'Preparar terra'},{id:'water',icon:Droplets,label:'Regar'}] as const).map(({id,icon:ToolIcon,label})=><Button key={id} variant="ghost" size="icon" aria-label={label} title={label} disabled={title} onClick={()=>{if(g)g.tool=id;}} className={g?.tool===id&&!title?'tool-active':'text-muted-foreground'}><GameIcon name={id}/><ToolIcon size={18}/></Button>)}</div>
         {g && !title && panel === 'home' && <Modal title={`Minha casa · ${HOME_LEVELS[g.settlement.home.level - 1].name}`} onClose={()=>setPanel(null)}>
           {g.settlement.home.level < HOME_LEVELS.length ? <Button variant="secondary" className="mb-4" onClick={()=>{upgradeHome(g);setPanel(null);}}><Hammer/>Reformar para {HOME_LEVELS[g.settlement.home.level].name}<small className="ml-2 opacity-80">{Object.entries(HOME_LEVELS[g.settlement.home.level].cost).map(([key,n])=>`${ITEMS[key].name} ${g.count(key)}/${n}`).join(' · ')}</small></Button> : <div className="progress-line mb-4">Sua mansão está completa.</div>}
@@ -513,7 +537,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
         </Modal>}
         <div className="settlement-dock">{g && isPlayerHome(g.interior) && <Button variant="game" size="icon" disabled={title} aria-label="Minha casa" title="Minha casa: reformar e mobiliar" onClick={()=>setPanel('home')}><GameIcon name="home"/></Button>}{([{tab:'farm',name:'Cultivar',sprite:'farm'},{tab:'build',name:'Construir',sprite:'build'},{tab:'workshop',name:'Oficinas',sprite:'workshop'}] as const).map(a=><Button variant="game" size="icon" key={a.tab} disabled={title} aria-label={a.name} title={a.name} onClick={()=>setPanel(a.tab)}><GameIcon name={a.sprite}/></Button>)}</div>
         <span className="footer-chapter">{title ? 'SUA HISTÓRIA. SEU MUNDO.' : g?.tool === 'explore' ? `${g?.settlement.structures.length} CONSTRUÇÕES · ${g?.settlement.harvests} COLHEITAS` : ({mine:'MINERAÇÃO',axe:'LENHADOR',till:'PREPARAR TERRA',seed:'PLANTAÇÃO',water:'IRRIGAÇÃO',build:'CONSTRUÇÃO',furnish:'DECORAÇÃO',unfurnish:'REMOVER MÓVEL'} as Record<string,string>)[g?.tool ?? '']}</span>
-        <div className="system-dock flex gap-1"><Button variant="ghost" size="icon" aria-label={fullscreen?'Sair da tela cheia':'Tela cheia'} title="Tela cheia" onClick={async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{g?.toast('A tela cheia não está disponível neste navegador.');}}}><GameIcon name="fullscreen"/></Button><Button variant="ghost" size="icon" disabled={title} title="Salvar jornada" aria-label="Salvar jornada" onClick={()=>{g?.save();g?.toast('Jornada salva.');}}><GameIcon name="save"/></Button><Button variant="ghost" size="icon" title="Alternar áudio" aria-label="Alternar áudio" onClick={()=>g?.audio.toggleMute()}><GameIcon name={g?.audio.muted?"mute":"sound"}/></Button></div>
+        <div className="system-dock flex gap-1"><Button variant="ghost" size="icon" aria-label={fullscreen?'Sair da tela cheia':'Tela cheia'} title="Tela cheia" onClick={async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();}catch{g?.toast('A tela cheia não está disponível neste navegador.');}}}><GameIcon name="fullscreen"/></Button><Button variant="ghost" size="icon" disabled={title} title="Salvar jornada" aria-label="Salvar jornada" onClick={()=>{g?.save();g?.toast('Jornada salva.');}}><GameIcon name="save"/></Button><Button variant="ghost" size="icon" title="Alternar áudio" aria-label="Alternar áudio" onClick={()=>g?.audio.toggleMute()}><GameIcon name={g?.audio.muted?"mute":"sound"}/></Button><Button variant="ghost" size="icon" disabled={title} title="Guia completo" aria-label="Abrir o guia completo" onClick={openGuide}><BookOpen/></Button></div>
       </footer>
       {!title && !liveOn && <div className="mobile-controls"><Joystick keys={g?.keys} /><Button variant="secondary" size="icon" aria-label="Atacar" onClick={()=>g?.attack()}><GameIcon name="explore"/></Button><Button variant="secondary" size="icon" aria-label="Interagir" onClick={()=>g?.interact()}><Sparkles/></Button><Button variant="secondary" size="icon" aria-label="Magia" onClick={()=>g&&g.cast(g.p.spell)}><GameIcon name="ether"/></Button><Button variant="secondary" size="icon" aria-label="Grimório" onClick={()=>setPanel(panel==='grimoire'?null:'grimoire')}><BookOpen/></Button></div>}
       {title && <a className="game-credits" href="game-credits.txt" target="_blank" rel="noreferrer">Créditos · Source of Mana</a>}
@@ -522,37 +546,82 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
   );
 }
 
-function TutorialOverlay({ mode, g, onSkip, onFinish }: { mode: "dungeon" | "modals"; g: Game; onSkip: () => void; onFinish: () => void }) {
+const GUIDE_STEPS = [
+  ["01 · Como usar o manual", "Este manual tem 43 passos curtos, organizados do básico ao conteúdo pós-campanha. Use Anterior e Próximo para estudar uma seção por vez; Pular guia apenas fecha a explicação, não apaga a campanha. Reabra Guia completo pelo ícone do livro ou pelo menu móvel sempre que quiser revisar uma regra."],
+  ["02 · Controles de teclado", "WASD ou setas movem o herói; Espaço ou J executam o ataque básico; E ou Enter interagem com o alvo próximo. I abre a mochila, C mostra Herói, Q ou L abre Missões, M abre o mapa, J abre Crônica, O abre Grande Crônica, P abre Pets, B abre Bestiário e V abre Grimório. H usa poção, G usa éter."],
+  ["03 · Controles de toque", "No celular, mova pelo joystick virtual e use os botões de ataque, interação, itens e magias. Toque no chão para indicar um destino e toque num inimigo para selecioná-lo. Se um painel cobrir a área de jogo, feche-o antes de tocar no campo: isso evita mover o herói por acidente enquanto você lê."],
+  ["04 · Interagir e ler avisos", "Aproxime-se de personagens, escadas, baús ou estruturas e pressione E/Enter, ou use o botão de interação. Leia o aviso que aparece junto ao personagem: ele informa o custo, a chave necessária, o estado do baú e por que uma passagem continua fechada. Uma escada selada normalmente exige derrotar todos os inimigos ou o guardião da sala."],
+  ["05 · Entender a HUD", "A tela mostra vida (HP), mana (MP), nível, experiência, ouro e pontos de atributo. HP chegar a zero derruba o herói; MP é consumido por magias. XP enche a barra do próximo nível. Observe também o nome da área e o objetivo no alto da tela: ambos ajudam a confirmar se você entrou no reino ou na missão esperados."],
+  ["06 · Movimento e leitura do mapa", "Observe primeiro paredes, corredores, passagens e inimigos. Clique ou toque numa célula livre para caminhar até ela; o herói pode parar diante de obstáculos. Ao selecionar um inimigo, ele pode persegui-lo. Troque o alvo ou dê outro comando se a aproximação colocar você no centro de vários adversários."],
+  ["07 · Combate básico", "Aproxime-se dentro do alcance da arma, ataque e reposicione-se. Armas diferentes têm alcance e velocidade distintos; compare sua descrição em Herói e na mochila. O clique num alvo também é útil para começar uma luta, mas não substitui esquiva: observe quem ainda está vivo antes de avançar para a saída."],
+  ["08 · Sinais, telegráficos e esquiva", "Chefes e criaturas especiais anunciam muitos golpes com animação, brilho, mira ou área marcada no chão. Quando o aviso aparecer, saia da área ou interrompa a linha de investida antes do impacto. Espere o golpe terminar e aproveite a abertura. Não fique parado tentando absorver uma sequência que poderia ter evitado."],
+  ["09 · Fases progressivas de chefes", "Chefes importantes atravessam cinco faixas de vida e ficam mais agressivos conforme perdem HP. A barra e o visual ajudam a perceber a mudança; recargas diminuem e movimentos ficam mais rápidos nas fases avançadas. Se morrer repetidamente, melhore arma e atributos, leve cura suficiente e aprenda o padrão em vez de manter ataque contínuo."],
+  ["10 · Sobrevivência: HP, MP e recuo", "Use uma poção antes de ficar encurralada(o), de preferência depois de sair do alcance inimigo. Se a mana acabar, volte ao ataque básico e reserve o éter para a próxima magia realmente útil. Recuar por alguns segundos, separar inimigos e lutar em corredor aberto costuma ser mais seguro do que trocar golpes no meio de um grupo."],
+  ["11 · Mochila e capacidade", "Abra a mochila com I ou pelo botão. Itens empilháveis mostram quantidade; armas e equipamentos ocupam espaços próprios. Se a mochila encher, baús e chefes podem não conseguir entregar novos itens. Use, equipe, venda ou guarde materiais com atenção — itens marcados como missão podem ser necessários mais tarde."],
+  ["12 · Equipar e comparar", "Selecione arma, armadura, amuleto, anel ou acessório para ver bônus e descrição. Defesa reduz parte do dano recebido; atributos podem aumentar vida, mana ou desempenho da arma. Trocar um item de nível alto nem sempre é melhor se o novo equipamento não combina com sua construção. Confirme que o item apareceu no espaço equipado."],
+  ["13 · Pontos de atributo", "Abra Herói com C. Força favorece golpes físicos; Destreza ajuda precisão e velocidade; Vitalidade melhora sobrevivência; Inteligência e Sabedoria favorecem recursos e magia. Os bônus concretos aparecem nos painéis do personagem. Distribua pontos conforme seu estilo e guarde uma poção se entrar numa região acima do seu nível."],
+  ["14 · Grimório e barra de habilidades", "Abra V para consultar habilidades conhecidas, custos de MP e opções equipadas. Os atalhos 1–5 usam os espaços da barra e R lança a magia selecionada; no celular, toque no ícone correspondente. Se nada acontecer, confira se a habilidade foi aprendida, está na barra, não está recarregando e há mana suficiente."],
+  ["15 · Poções, éter e preparação", "Poções restauram vida e éter restaura mana; use H e G no teclado ou os botões móveis. Estoque itens antes de aceitar chefes, expedições ou áreas remotas. Baús, missões e lojas dão suprimentos. Se gastar toda a cura no caminho, retorne a Potos — não é necessário insistir numa batalha mal preparada."],
+  ["16 · Livro de missões", "Q ou L abre o livro de Missões. Leia o objetivo atual, a região, o NPC e o contador. Missões de conversa, coleta, caça, chefe e escolha têm passos diferentes; concluir um contador nem sempre encerra a missão — muitas vezes é preciso voltar ao personagem que a iniciou."],
+  ["17 · Diálogos e decisões", "Converse com NPCs marcados e leia as falas até o fim. Escolhas podem alterar reputação, confiança, aliados ou finais; o jogo registra as decisões na Crônica. Se uma resposta for definitiva, pare um instante, leia as duas alternativas e pense no que deseja que aquele reino se lembre."],
+  ["18 · Mapa dos Atos e lacres", "O Mapa dos Atos fica em Potos, perto do Oráculo. Ele lista regiões principais e indica quais estão liberadas pela campanha. Ato I abre após a etapa da Árvore; os atos seguintes pedem a cadeia principal correspondente. Não tente contornar um lacre: avance a missão e volte ao mapa quando o jogo registrar a conclusão."],
+  ["19 · Saga, cidades e modos especiais", "Zonas da Saga podem ter cidades, baús secretos, ondas de inimigos ou travessias contra o tempo. Em ondas, sobreviva até o contador zerar; numa corrida, siga o objetivo antes do limite. A entrada é identificada pelo nome da região. As vitórias usam IDs próprios, registram progresso e liberam a zona seguinte."],
+  ["20 · Grande Crônica e reputação", "O painel Grande Crônica (O) reúne facções, missões, reputação e finais. Reputação muda preços, acesso a algumas histórias e a pontuação dos desfechos. Leia o painel após escolhas importantes. A expansão do Conselho dos Reinos acrescenta três votações pós-Ato V que se somam a essa mesma reputação, em vez de criar uma moeda paralela."],
+  ["21 · Descobertas e reinos secretos", "O painel Descobertas acompanha chaves, biomas, baús, ilhas e segredos. Alguns reinos ocultos abrem por sequências de pistas; outros exigem relíquias. Procure interações e pistas ambientais, e confira o registro após encontrá-las. Uma porta secreta não significa que toda a região estará liberada sem cumprir os demais requisitos."],
+  ["22 · Recursos e ferramentas", "Explore, minere, corte madeira, prepare a terra e regue com a ferramenta correspondente no dock. Recolha materiais ao caminhar pela superfície e verifique a mochila. Cada recurso tem usos em construção, receita, missão ou comércio. A ferramenta errada pode não produzir nada; troque para a ação adequada antes de repetir."],
+  ["23 · Oficina, receitas e mercado", "Carpintaria, forja e alquimia transformam recursos em itens. A receita informa materiais e quantidade; confirme que tem espaço na mochila antes de fabricar. O mercado compra e vende itens por preços que podem variar com a reputação e a reconstrução de Potos. Compare o valor exibido antes de confirmar cada transação."],
+  ["24 · Cultivo e colheita", "Prepare um canteiro, plante uma semente e regue. As culturas levam tempo de jogo para amadurecer; voltar a regar e colher no momento correto rende materiais. Confira se a ferramenta de cultivo está selecionada e se a célula está livre. Cultivo é uma forma tranquila de obter itens, não um requisito para toda missão."],
+  ["25 · Construção e casa", "O painel Construir mostra estruturas que exigem materiais. Minha Casa permite melhorar espaços e mobiliário conforme o nível do lar. Leia custos antes de confirmar: madeira, pedra, minério e ouro não são intercambiáveis. Depois da construção, a área pode mudar visualmente e novas interações ficam disponíveis."],
+  ["26 · Arquipélago e embarcação", "O arquipélago usa uma área de navegação separada. Consiga uma embarcação, aproxime-se do ponto de partida e navegue em direção às ilhas. Leve cura e espaço livre: algumas ilhas contêm baús, encontros e rotas próprias. Se estiver em combate ou numa masmorra, conclua a atividade antes de tentar embarcar."],
+  ["27 · Ilhas e mapas distantes", "Cada ilha pode ter suas próprias descobertas e entradas. Explore o perímetro, procure elementos interativos e verifique o registro para confirmar que o lugar foi salvo. A cartografia de Vésper também contabiliza descobertas do arquipélago. Use o mapa e as pistas em vez de presumir que todas as ilhas podem ser acessadas pelo mesmo portal."],
+  ["28 · Bestiário", "B abre o Bestiário com criaturas que você encontrou. Leia bioma, comportamento e registro de cada espécie para preparar a próxima travessia. Descobrir novos inimigos acrescenta páginas às Crônicas das Profundezas. O Bestiário é uma referência: ele não substitui os sinais de ataque exibidos durante a luta."],
+  ["29 · Templos e Abismo", "Templos são áreas curtas com alta escuridão; certos portais exigem tocha. O Abismo é uma descida longa, com recorde e retomada próprios. Confira a escada inicial e a de saída: algumas levam ao piso anterior ou à superfície. Baús e chefes têm chaves e recompensas diferentes por profundidade."],
+  ["30 · Cidadela de Gehenna", "A Cidadela tem 100 andares, dez temas e guardiões a cada dez pisos. Ela só abre depois que Azrakel for derrotado na Saga de Gehenna. Checkpoints de cinco em cinco andares permitem retomar o avanço, e o melhor piso é salvo separadamente do Abismo. Prepare equipamento e cura antes de entrar; sair da cidadela não apaga o recorde."],
+  ["31 · Pets e ovos", "Pets (P) mostra companheiros, ovos, equipe e necessidades. Ovos chocam com passos e tempo; alimentar e cuidar do pet melhora vínculo e capacidade de luta. A espécie define habilidades e elemento. Mantenha um companheiro ativo se quiser receber seus efeitos e reorganize a equipe no painel antes de entrar num desafio longo."],
+  ["32 · Laços de Eco", "Para despertar o Laço, mantenha pelo menos dois pets de elementos diferentes na equipe e vínculo médio 20. Abra a central Ecos Além, selecione Laços e tente ativá-lo quando os requisitos aparecerem. O Laço registra uma cena de lealdade, aumenta o dano do herói em 8% e reduz o dano recebido em 8% enquanto a equipe continuar com dois ou mais companheiros."],
+  ["33 · Central Ecos Além", "A central fica no dock inferior e no menu móvel. Ela agrupa dez sistemas pós-campanha com progresso salvo. Algumas ações só abrem quando o Ato V e a sequência Ecos Além permitem; outras, como consultar o manual ou ver o Museu, aparecem antes. Cada cartão explica seu próprio requisito e consequência."],
+  ["34 · Cartografia de Vésper", "Visite uma zona da Saga para registrá-la. Na central Cartografia, escolha Traçar rota para marcar o trecho no Atlas; depois use Viajar para retornar diretamente a uma zona já conhecida. As rotas respeitam o Ato, o reino anterior e as zonas concluídas. O mapa também resume ilhas descobertas e escolhas paralelas."],
+  ["35 · Reconstrução de Potos", "Derrote o chefe final de cada cidade-reino de Ecos Além. Moradores retornam ao redor do Mapa dos Atos, novas funções aparecem e a primeira libertação abre uma mercadora. Cada etapa até o limite melhora os preços do mercado. Volte a Potos depois de uma vitória para ver os personagens e conferir a mudança de preço."],
+  ["36 · Conselho dos Reinos", "Depois do Ato V, a central oferece três votações. Cada voto altera a reputação de facções e soma pontos ao tipo de final escolhido. A Liga da Maré afeta o preço da loja; as outras facções mudam o equilíbrio do epílogo. Uma pauta aceita não pode ser votada novamente, então leia a consequência antes de escolher."],
+  ["37 · Expedições Oníricas", "Chefes de Ecos Além concedem Memórias de Eco. Gaste uma na central para entrar num piso procedural curto, abrir um cache, derrotar sombras e o guardião, e sair pela escada. Vencer devolve uma memória, ouro, XP e um Fragmento de Eco. É possível abandonar pela entrada; se fizer isso, a memória usada não vira recompensa."],
+  ["38 · Rituais de constelação", "Leia a pista e toque Estrela, Onda e Sino na ordem descrita; confirme a sequência e tente novamente se errar. Os três rituais completos registram uma rota estelar. Ela oferece um caminho alternativo ao Coração Oculto, mas não ignora o requisito de reunir as doze relíquias. Os erros ficam apenas no contador de tentativas."],
+  ["39 · Caravanas", "Em Potos, aceite a encomenda disponível e pague o investimento em ouro e tábuas. Visite o reino indicado, volte ao mercado e conclua a entrega. O cartão mostra destino, estado de visita e recompensa; a rota comercial concluída passa a aparecer no Atlas. A encomenda ativa fica salva se fechar o jogo."],
+  ["40 · Museu das Canções Perdidas", "Cada relíquia dos cinco reinos pós-Ato V pode ser registrada no Museu. Selecione Ouvir para abrir a cena associada. Depois escolha exposição Integral ou Gentil; a curadoria fica persistente e muda o texto que o Museu apresenta para aquela lembrança. Não é preciso deixar a relíquia equipada para mantê-la no catálogo."],
+  ["41 · Tempestades de Fratura", "O evento é opt-in. Marcar Receber avisos não inicia combate: escolha um reino e toque Confirmar para entrar na instância. Derrote o Arauto para estabilizar a fenda e receber a recompensa. A saída inicial abandona a tentativa sem interromper o mundo ou retirar itens; nenhum evento começa sozinho."],
+  ["42 · Novo Ciclo: Ecos Além", "Depois de vencer os cinco chefes finais, escolha Preservar ou Transformar para cada cidade. Volte a Potos e inicie o Ciclo. O jogo reabre os cinco reinos e registra os desfechos anteriores; eles mudam HP, ataque e recompensas dos próximos chefes. Nível, itens, casa, campanha principal e outros registros continuam salvos."],
+  ["43 · Salvar e resolver problemas", "Salve pela barra ou pelo menu; vitórias, escolhas e transações também são gravadas automaticamente. Se um botão não responder, confira pré-requisito, recurso, espaço de inventário e estado da área. Se perder o foco no celular, feche o painel e toque no jogo. O ícone do livro reabre este guia completo em qualquer momento."],
+] as const;
+
+const TUTORIAL_LESSONS = [
+  ["Piso 1 · Movimento e leitura da sala", "Use WASD, setas ou joystick para caminhar e observe a posição dos inimigos, da escada e da sua HUD. A sala precisa ficar segura antes de abrir a próxima passagem. Experimente também clicar no chão para escolher um destino."],
+  ["Piso 2 · Ataque e posicionamento", "Ataque com Espaço, o botão de espada ou clique no inimigo. Aproxime-se o suficiente para a sua arma e saia do caminho depois de golpear. Derrote as criaturas desta sala para liberar a escada."],
+  ["Piso 3 · Baú e inventário", "Um baú de suprimentos está próximo ao ponto de entrada. Aproxime-se e pressione E; depois abra a mochila (I) para ler o item recebido. Baús são uma fonte útil de ouro, consumíveis e materiais."],
+  ["Piso 4 · HP, MP e recuperação", "Observe as barras de HP e MP. Use poções quando sua vida baixar e guarde éter para recuperar mana; os botões ficam junto à barra de magias. Mantenha distância enquanto usa consumíveis e derrote os inimigos antes de avançar."],
+  ["Piso 5 · Magia e habilidades", "O baú desta sala garante éter para a prática. Abra o Grimório (V), confira o custo de mana e teste uma habilidade pelos botões numerados ou pela magia selecionada. Alterne magia e ataque básico em vez de gastar toda a mana de uma vez."],
+  ["Piso 6 · Guardião e retorno", "Observe os sinais do Guardião do Primeiro Eco e desvie dos golpes anunciados. Ataque nas aberturas, use suprimentos e, se necessário, revise atributos em Herói (C). Ao vencer, você volta ao mundo principal e recebe o guia completo."],
+] as const;
+
+function TutorialOverlay({ mode, g, onSkip, onAcknowledge, onFinish }: { mode: "dungeon" | "modals"; g: Game; onSkip: () => void; onAcknowledge: () => void; onFinish: () => void }) {
   const [step, setStep] = useState(0);
   const [ack, setAck] = useState(false);
-  const modalSteps = [
-    ["HUD e missão", "A barra superior mostra nível, ouro, HP, MP e XP. O painel SUA JORNADA acompanha objetivos ativos e avisa quando uma missão está pronta."],
-    ["Mochila e itens", "Abra Inventário pelo botão da mochila ou I. Clique numa poção para usar, em equipamento para vestir e nos itens para ler seus efeitos."],
-    ["Herói, atributos e aparência", "Abra Herói ou C. Use os pontos ganhos ao subir de nível em Força, Destreza, Vitalidade, Inteligência e Sabedoria. A aba Aparência reúne skins, olhos, cabelos, capas e chapéus."],
-    ["Missões e crônicas", "Missões reúne objetivos disponíveis. Crônica registra os Atos e memórias; Grande Crônica mostra a progressão épica e escolhas futuras."],
-    ["Mapa e descobertas", "Mapa ou M mostra o atlas e os destinos desbloqueados. Descobertas guarda lugares, baús, entradas e segredos já encontrados."],
-    ["Bestiário e grimório", "Bestiário registra inimigos e criaturas conhecidas. Grimório permite aprender, equipar e testar habilidades especiais."],
-    ["Pets e personalização", "Pets ou P administra ovos, equipe e companheiros. Aparência permite combinar o visual original com sprites e cosméticos Kaetram."],
-    ["Lar, cultivo e oficinas", "Cultivar, Construir, Minha casa e Oficinas cuidam de plantações, estruturas, móveis, forja, alquimia, carpintaria e mercado."],
-  ] as const;
-  const floor = Math.max(1, Math.min(3, g.tutorialFloor || 1));
-  const dungeonCopy = floor === 1
-    ? ["Andar 1 · Mover e atacar", "Use WASD, setas ou o joystick para andar. Mire em uma criatura e use Espaço, o botão de espada ou toque no inimigo para atacar. A escada abre quando a sala estiver segura."]
-    : floor === 2
-      ? ["Andar 2 · Itens e magia", "Use a poção e o éter no rodapé quando HP ou MP baixarem. O botão de magia e as teclas 1–5 lançam espíritos e habilidades. Mantenha distância e ataque entre os golpes."]
-      : ["Andar 3 · Atributos e chefe", "O Guardião tem fases e efeitos especiais. Ataque, mova-se para evitar telegráficos, use poções e abra Herói (C) para gastar pontos de atributo quando subir de nível."];
-  const title = mode === "dungeon" ? dungeonCopy[0] : modalSteps[step]![0];
-  const body = mode === "dungeon" ? dungeonCopy[1] : modalSteps[step]![1];
-  if (mode === "dungeon" && ack) return <div className="absolute top-2 left-1/2 z-40 -translate-x-1/2 pointer-events-none"><Button variant="game" className="pointer-events-auto game-panel text-[10px]" onClick={() => setAck(false)}>Mostrar instrução · andar {floor}/3</Button></div>;
-  return <div className="absolute inset-0 z-40 flex items-end justify-center p-3 pointer-events-none" role="dialog" aria-label="Tutorial de primeira jornada">
-    <div className="game-panel pointer-events-auto w-full max-w-xl border border-primary/70 bg-background/95 p-4 shadow-2xl">
-      <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-wider text-primary"><span>{mode === "dungeon" ? `Treino de Aventureiro · ${floor}/3` : `Guia dos modais · ${step + 1}/${modalSteps.length}`}</span><span className="text-muted-foreground">Primeira jornada</span></div>
-      <h2 className="mt-1 text-xl text-foreground">{title}</h2>
-      <p className="mt-2 font-body text-lg leading-6 text-foreground/90">{body}</p>
-      {mode === "modals" && <div className="mt-3 flex flex-wrap gap-1 text-[10px] text-muted-foreground">{modalSteps.map(([label], i) => <span key={label} className={`border px-1.5 py-0.5 ${i === step ? "border-primary text-primary" : "border-border"}`}>{label}</span>)}</div>}
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
-        <Button variant="outline" onClick={() => { g.audio.sfx("ui"); onSkip(); }}>{mode === "dungeon" ? "Pular dungeon" : "Pular guia"}</Button>
-        {mode === "dungeon" ? <Button onClick={() => { g.audio.sfx("ui"); setAck(true); }}>Entendi · continuar</Button> : step + 1 < modalSteps.length ? <Button onClick={() => { g.audio.sfx("ui"); setStep((v) => v + 1); }}>Próximo modal <ChevronRight size={15}/></Button> : <Button onClick={() => { g.audio.sfx("level"); onFinish(); }}>Entrar no mundo <ChevronRight size={15}/></Button>}
+  const floor = Math.max(1, Math.min(TUTORIAL_FLOORS, g.tutorialFloor || 1));
+  const dungeonCopy = TUTORIAL_LESSONS[floor - 1]!;
+  const title = mode === "dungeon" ? dungeonCopy[0] : GUIDE_STEPS[step]![0];
+  const body = mode === "dungeon" ? dungeonCopy[1] : GUIDE_STEPS[step]![1];
+  const progress = mode === "dungeon" ? floor / TUTORIAL_FLOORS : (step + 1) / GUIDE_STEPS.length;
+  if (mode === "dungeon" && ack) return <div className="absolute top-2 left-1/2 z-40 -translate-x-1/2 pointer-events-none"><Button variant="game" className="pointer-events-auto game-panel text-[10px]" onClick={() => { g.tutorialPauseInput = true; g.keys.clear(); setAck(false); }}>Mostrar instrução · piso {floor}/{TUTORIAL_FLOORS}</Button></div>;
+  return <div className="absolute inset-0 z-40 flex items-end justify-center p-3 pointer-events-auto" role="dialog" aria-modal="true" aria-label={mode === "dungeon" ? "Treino prático de primeira jornada" : "Guia completo do jogo"}>
+    <div className="game-panel w-full max-w-2xl max-h-[84vh] overflow-y-auto border border-primary/70 bg-background/95 p-4 shadow-2xl">
+      <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-wider text-primary"><span>{mode === "dungeon" ? `Treino prático · ${floor}/${TUTORIAL_FLOORS}` : `Manual de campo · ${step + 1}/${GUIDE_STEPS.length}`}</span><span className="text-muted-foreground">Você controla o ritmo</span></div>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded bg-muted" role="progressbar" aria-label="Progresso do guia" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}><div className="h-full bg-primary transition-all" style={{ width: `${progress * 100}%` }}/></div>
+      <h2 className="mt-3 text-xl text-foreground">{title}</h2>
+      <p className="mt-2 whitespace-pre-line font-body text-base leading-6 text-foreground/90">{body}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <Button variant="outline" onClick={() => { g.audio.sfx("ui"); onSkip(); }}>{mode === "dungeon" ? "Pular treino" : "Pular guia"}</Button>
+        {mode === "dungeon" ? <Button onClick={() => { g.audio.sfx("ui"); onAcknowledge(); setAck(true); }}>Entendi · iniciar este piso</Button> : <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" disabled={step === 0} onClick={() => { g.audio.sfx("ui"); setStep((v) => Math.max(0, v - 1)); }}>Anterior</Button>
+          {step + 1 < GUIDE_STEPS.length ? <Button onClick={() => { g.audio.sfx("ui"); setStep((v) => Math.min(GUIDE_STEPS.length - 1, v + 1)); }}>Próximo passo <ChevronRight size={15}/></Button> : <Button onClick={() => { g.audio.sfx("level"); onFinish(); }}>Concluir e voltar ao jogo <ChevronRight size={15}/></Button>}
+        </div>}
       </div>
     </div>
   </div>;

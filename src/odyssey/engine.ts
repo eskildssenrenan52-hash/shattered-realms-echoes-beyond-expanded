@@ -8,10 +8,13 @@ import { pickVariant } from "@/odyssey/tile-art";
 import { WorldArt, TREE_TILES, hasProp } from './world-art';
 import { TEMPLES } from './depths';
 import { ABYSS_ENTRY } from './dungeon';
+import { freshEchoSystems, sanitizeEchoSystems, type EchoSystemsState } from './echoes-state';
+import { recordStormBossVictory } from './echoes-play';
+import { ECHOES_BEYOND_REALMS } from './echoes-beyond';
 import { drawDepthProps } from './depth-props';
 import { drawSecrets, secretLights, isRealm } from './secret-play';
 import { MANOPLA_ITEM } from './manopla-lore';
-import { SAGA_BOSS_LOOK, sagaOnBoss, sagaOnKill, sagaModeTick, drawSaga, sagaLights, sagaPosOf, sagaWeather } from './saga-play';
+import { SAGA_BOSS_LOOK, sagaOnBoss, sagaOnKill, sagaModeTick, drawSaga, sagaLights, sagaPosOf, sagaWeather, sagaPlaza } from './saga-play';
 import { softHole, softGlow, Quality } from './perf';
 import { FRONTIER, FRONTIER_GATES, LEGACY_W, LEGACY_H, type FrontierBiome } from './frontier';
 import { createHomeInterior, drawHome, drawFurniture, FURNITURE, freshHome, type FurnitureKind } from "./home";
@@ -39,7 +42,7 @@ import { BEASTS, beastKey } from "./bestiary";
 import { drawBeast } from "./beast-art";
 import { siegeTick, siegeMarch, siegeOnKill, drawSiegeHud, type SiegeRun } from "./siege-play";
 import { SIEGE_BOSS_LOOK } from "./siege";
-import { carveEntrances, depthAction, surfaceEntrance, drawSurfaceEntrances, drawDepth, depthLights, depthDarkness, leaveDepth, enterCitadel, restartTutorialFloor, TUTORIAL_BOSS_ID, TUTORIAL_BOSS_LOOK, type DepthState } from "./depthplay";
+import { carveEntrances, depthAction, surfaceEntrance, drawSurfaceEntrances, drawDepth, depthLights, depthDarkness, leaveDepth, enterCitadel, restartTutorialFloor, TUTORIAL_BOSS_ID, TUTORIAL_BOSS_LOOK, TUTORIAL_FLOORS, type DepthState } from "./depthplay";
 import { BOAT_RECIPES } from "./archipelago";
 import { archipelagoInteract, archipelagoPrompt, archipelagoArea, onBoatCraft, updateSea, renderSea, islandTick, islandOnKill, leaveArchipelago, drawIslandProps, drawIslandAtmosphere, ISLAND_BOSS_RESPAWN_SECONDS, type SeaRun, type IslandRun } from "./sailing";
 import { objectiveWaypoint, type Waypoint } from "./waypoint";
@@ -127,6 +130,10 @@ export class Game {
   tutorialActive = false;
   tutorialFloor = 0;
   tutorialDone = false;
+  /** Impede movimento/ataque enquanto uma instrução do tutorial está aberta. */
+  tutorialPauseInput = false;
+  /** Incrementa ao iniciar/reiniciar um piso para reabrir sua instrução visual. */
+  tutorialRevision = 0;
   tutorialModalPending = false;
   tutorialModalDone = false;
   surfaceEnemies: Enemy[] = [];
@@ -139,13 +146,45 @@ export class Game {
   abyssBest = 0;
   returnPosition = { x: 0, y: 0 };
   discoveries = new Set<string>();
+  /** Estado aditivo dos dez sistemas de Ecos Além; saves anteriores recebem defaults. */
+  echoSystems: EchoSystemsState = freshEchoSystems();
+  private restoredNpcCache: { key: string; npcs: NpcDef[] } | null = null;
   openedChests = new Set<string>();
   transition = 0;
   doorCooldown = 0;
-  get areaName() { const ar = archipelagoArea(this); if (ar) return ar; const sp = sagaPosOf(this); if (sp) return `${sp.realm.name} · ${sp.zone.name}`; if (this.siege) return `Cidade de Aurélia · Onda ${this.siege.wave}`; if (this.depth) return this.depth.kind === 'tutorial' ? `Treino de Aventureiro · Andar ${this.depth.floor}/3` : this.depth.kind === 'abyss' ? `Abismo do Cântico · Andar ${this.depth.floor}` : isRealm(this.depth.temple) ? `${this.depth.temple?.name} · Reino Oculto` : `${this.depth.temple?.name} · 2º andar`; return this.interior?.name ?? (Math.hypot(this.p.x / TS - 122, this.p.y / TS - 126) < 19 ? 'Vila de Potos' : BIOME_NAMES[this.biome]); }
+  get areaName() { const ar = archipelagoArea(this); if (ar) return ar; const sp = sagaPosOf(this); if (sp) return `${sp.realm.name} · ${sp.zone.name}`; if (this.siege) return `Cidade de Aurélia · Onda ${this.siege.wave}`; if (this.depth) return this.depth.kind === 'tutorial' ? `Treino de Aventureiro · Andar ${this.depth.floor}/6` : this.depth.kind === 'dream' ? `Expedição onírica · Andar ${this.depth.floor}/1` : this.depth.kind === 'storm' ? `Tempestade de Fratura · Andar ${this.depth.floor}/1` : this.depth.kind === 'abyss' ? `Abismo do Cântico · Andar ${this.depth.floor}` : isRealm(this.depth.temple) ? `${this.depth.temple?.name} · Reino Oculto` : `${this.depth.temple?.name} · 2º andar`; return this.interior?.name ?? (Math.hypot(this.p.x / TS - 122, this.p.y / TS - 126) < 19 ? 'Vila de Potos' : BIOME_NAMES[this.biome]); }
+  private restoredNpcs(): NpcDef[] {
+    const freed = this.echoSystems.restoration.freedRealms.slice(0, 3);
+    const key = freed.join('|');
+    if (this.restoredNpcCache?.key === key) return this.restoredNpcCache.npcs;
+    const center = sagaPlaza(this.overworld).acts;
+    const used = new Set<string>();
+    const roles: Omit<NpcDef, 'tx' | 'ty'>[] = [
+      { id: 'potos_echo_merchant', name: 'Auri Rebite', title: 'Mercadora das Pontes', pal: { skin: '#e0b890', hair: '#503020', body: '#b06030', legs: '#503018', accent: '#ffe080' }, lines: ['Ferrólume devolveu as rotas ao mundo. Tenho suprimentos e preços especiais para quem as percorreu.'], role: 'shop' },
+      { id: 'potos_echo_archivist', name: 'Edda das Canções', title: 'Curadora das Memórias', pal: { skin: '#e8d0c0', hair: '#d8b060', body: '#604080', legs: '#302040', accent: '#fff0a0' }, lines: ['Caligo e Auriflor mandaram lembranças. O Museu das Canções Perdidas já pode receber suas relíquias.'] },
+      { id: 'potos_echo_builder', name: 'Mestre Vardena', title: 'Construtor de Atalhos', pal: { skin: '#c09070', hair: '#807060', body: '#604838', legs: '#302018', accent: '#a0e8ff' }, lines: ['Cada reino libertado faz Potos crescer. Registre rotas no Mapa de Vésper para viajar direto aos trechos que já explorou.'] },
+    ];
+    const npcs: NpcDef[] = [];
+    for (let i = 0; i < freed.length; i++) {
+      let spot: { tx: number; ty: number } | undefined;
+      for (let radius = 3; radius <= 12 && !spot; radius++) {
+        const ring: [number, number][] = [];
+        for (let dx = -radius; dx <= radius; dx++) ring.push([center.tx + dx, center.ty - radius], [center.tx + dx, center.ty + radius]);
+        for (let dy = -radius + 1; dy < radius; dy++) ring.push([center.tx - radius, center.ty + dy], [center.tx + radius, center.ty + dy]);
+        for (const [tx, ty] of ring) {
+          const tile = `${tx},${ty}`;
+          if (used.has(tile) || NPCS.some((n) => Math.hypot(n.tx - tx, n.ty - ty) < 3) || solidAt(this.overworld, tx * TS + 8, ty * TS + 8)) continue;
+          spot = { tx, ty }; used.add(tile); break;
+        }
+      }
+      if (spot) npcs.push({ ...roles[i]!, ...spot, name: roles[i]!.name, title: `${roles[i]!.title} · ${ECHOES_BEYOND_REALMS.find((r) => r.id === freed[i])?.name ?? 'Potos'}` });
+    }
+    this.restoredNpcCache = { key, npcs };
+    return npcs;
+  }
   get localNpcs(): NpcDef[] {
     if (this.depth || this.island || this.sea) return [];
-    if (!this.interior) return NPCS;
+    if (!this.interior) return [...NPCS, ...this.restoredNpcs()];
     const npc = NPCS.find(n => n.id === this.interior?.resident);
     return npc ? [{ ...npc, tx: 121, ty: 100 }] : [];
   }
@@ -199,7 +238,7 @@ export class Game {
   /** Qualidade adaptativa: espaça efeitos pesados em aparelhos fracos sem removê-los. */
   quality = new Quality();
   buffs: Buffs = freshBuffs();
-  priceMult() { return shopPriceMult(this); }
+  priceMult() { return shopPriceMult(this) * (1 - Math.min(0.075, this.echoSystems.restoration.level * 0.025)); }
   bloomOk = false;
   nextId = 1;
   autosaveT = 0;
@@ -413,6 +452,7 @@ export class Game {
       if (this.inventory.length >= this.INV_MAX) { this.toast("Inventário cheio!", "#ff8080"); return false; }
       this.inventory.push({ id, qty: stack ? qty : 1 });
     }
+    if (ECHOES_BEYOND_REALMS.some((realm) => realm.reward.item === id) && !this.echoSystems.museum.relics.includes(id)) this.echoSystems.museum.relics.push(id);
     return true;
   }
   removeItem(id: string, qty = 1) {
@@ -490,7 +530,7 @@ export class Game {
       this.twinRolls.delete(mainId);
       const b = lead?.boss?.def ?? state.def;
       this.bossesDone.add(mainId);
-      if (b.id === TUTORIAL_BOSS_ID) { this.tutorialActive = false; this.tutorialDone = true; this.tutorialFloor = 3; this.tutorialModalPending = true; this.p.points = Math.max(this.p.points, 3); }
+      if (b.id === TUTORIAL_BOSS_ID) { this.tutorialActive = false; this.tutorialDone = true; this.tutorialFloor = TUTORIAL_FLOORS; this.tutorialModalPending = true; this.tutorialPauseInput = true; this.keys.clear(); this.p.points = Math.max(this.p.points, 3); }
       this.activeBoss = null;
       this.audio.boss = false;
       this.toast(`${state.twinKey ? `${b.name} e seu gêmeo foram derrotados` : `${b.name} foi derrotado`}!`, "#ffd040");
@@ -507,6 +547,8 @@ export class Game {
       const victoryFx = fxFor(`boss-defeat:${mainId}`, ["bossdefeat", "holy"]);
       this.fx(victoryFx.name, e.x, e.y - 14, 1.8, false, 0.65, victoryFx.h);
       this.fireBeats(`boss:${mainId}`); sagaOnBoss(this, mainId);
+      if (b.id.startsWith("fracture_storm_")) recordStormBossVictory(this, b.id);
+      if (b.id === TUTORIAL_BOSS_ID) leaveDepth(this, true);
       this.save();
       return;
     }
@@ -772,12 +814,13 @@ export class Game {
   recipes(station: "smith" | "alchemist" | "carpenter") { return [...RECIPES, ...CARPENTRY_RECIPES, ...BOAT_RECIPES].filter((r) => r.station === station); }
   buy(id: string) {
     const it = ITEMS[id];
-    if (this.p.gold < it.price) { this.audio.sfx("hurt"); return; }
-    if (this.addItem(id)) { this.p.gold -= it.price; this.audio.sfx("coin"); }
+    const price = Math.max(1, Math.round(it.price * this.priceMult()));
+    if (this.p.gold < price) { this.audio.sfx("hurt"); return; }
+    if (this.addItem(id)) { this.p.gold -= price; this.audio.sfx("coin"); }
   }
   sell(idx: number) {
     const s = this.inventory[idx]; if (!s) return;
-    const price = Math.max(1, Math.floor(ITEMS[s.id].price / 2));
+    const price = Math.max(1, Math.floor(ITEMS[s.id].price * Math.max(0.65, Math.min(1.25, 2 - this.priceMult())) / 2));
     this.removeItem(s.id, 1);
     this.p.gold += price;
     this.audio.sfx("coin");
@@ -1785,7 +1828,7 @@ export class Game {
     try {
       const data = {
         p: { ...this.p, ...(this.interior ? this.returnPosition : {}), ...(this.depth ? this.depthReturn : {}), ...(this.sea || this.island ? this.seaReturn : {}), dead: 0 }, abyssBest: this.abyssBest, inventory: this.inventory, questStatus: this.questStatus, questProg: this.questProg,
-        discoveries: [...this.discoveries], openedChests: [...this.openedChests],
+        discoveries: [...this.discoveries], openedChests: [...this.openedChests], echoSystems: this.echoSystems,
         settlement: this.settlement, terrainEdits:this.terrainEdits, statues: [...this.statues], bosses: [...this.bossesDone], twinRolls: Object.fromEntries(this.twinRolls), time: this.time, cycle: this.cycle, seenBeats: [...this.seenBeats], tutorialDone: this.tutorialDone, tutorialModalPending: this.tutorialModalPending, tutorialModalDone: this.tutorialModalDone,
       };
       localStorage.setItem("golden-arrow-save", JSON.stringify(data));
@@ -1803,6 +1846,7 @@ export class Game {
       for (const [key,value] of Object.entries(this.terrainEdits)) {const [x,y]=key.split(',').map(Number); if(x>=0&&y>=0&&x<W&&y<H)this.overworld.tiles[y*W+x]=value;}
       applyStructures(this); this.buildMinimap();
       this.discoveries = new Set(d.discoveries ?? []); this.openedChests = new Set(d.openedChests ?? []);
+      this.echoSystems = sanitizeEchoSystems(d.echoSystems);
       this.inventory = d.inventory; this.questStatus = d.questStatus; this.questProg = d.questProg;
       this.statues = new Set(d.statues); this.bossesDone = new Set(d.bosses); this.time = d.time ?? 0.3;
       this.twinRolls = new Map(Object.entries(d.twinRolls ?? {}).map(([id, value]) => [id, !!value]));
@@ -1812,7 +1856,7 @@ export class Game {
       this.tutorialDone = d.tutorialDone ?? true;
       this.tutorialModalPending = d.tutorialModalPending ?? false;
       this.tutorialModalDone = d.tutorialModalDone ?? true;
-      this.tutorialActive = false; this.tutorialFloor = 0;
+      this.tutorialActive = false; this.tutorialFloor = 0; this.tutorialPauseInput = false;
       if (!d.seenBeats) this.seenBeats.add("prologue"); // saves antigos já viveram o começo da história
       if (this.cycle > 0) this.rebuildEnemies(); else this.retireDefeatedBosses();
       if (this.questStatus["m6"] === "done" && !this.count(MANOPLA_ITEM) && !this.seenBeats.has("manopla_vesper")) this.addItem(MANOPLA_ITEM);

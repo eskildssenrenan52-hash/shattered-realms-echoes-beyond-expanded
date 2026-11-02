@@ -23,13 +23,13 @@ function makeGame() {
 }
 
 describe("chefes do arquipélago", () => {
-  it("reduz a vida dos bosses a um terço e mantém o mesmo HP no gêmeo", () => {
+  it("aplica 5× à base dos chefes de ilha e mantém o mesmo HP no gêmeo", () => {
     const game = makeGame();
     const island = ISLANDS[0]!;
     const boss = game.makeEnemy(island.boss.kind, 30 * TS + 8, 30 * TS + 8, 4);
     const originalBaseHp = boss.maxhp * island.boss.hp;
     const originalBossHp = bossHp(originalBaseHp);
-    const baseHp = originalBaseHp / 3;
+    const baseHp = originalBaseHp;
     boss.maxhp = boss.hp = bossHp(baseHp);
     boss.atk = Math.round(boss.atk * 1.5);
     boss.boss = islandBossState(island, boss, baseHp);
@@ -42,7 +42,8 @@ describe("chefes do arquipélago", () => {
     expect(boss.boss.phase).toBe(1);
     expect(boss.boss.def.id).toBe(`isle_${island.id}_boss`);
     expect(boss.maxhp).toBe(bossHp(baseHp));
-    expect(Math.abs(boss.maxhp * 3 - originalBossHp)).toBeLessThanOrEqual(2);
+    expect(boss.maxhp).toBe(originalBossHp);
+    expect(boss.boss.def.hp).toBe(baseHp);
 
     const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.01);
     game.activateBoss(boss);
@@ -82,7 +83,7 @@ describe("chefes do arquipélago", () => {
     const game = makeGame();
     const island = ISLANDS[0]!;
     const boss = game.makeEnemy(island.boss.kind, 30 * TS + 8, 30 * TS + 8, 4);
-    const baseHp = boss.maxhp * island.boss.hp / 3;
+    const baseHp = boss.maxhp * island.boss.hp;
     boss.maxhp = boss.hp = bossHp(baseHp);
     boss.boss = islandBossState(island, boss, baseHp);
     game.enemies = [boss];

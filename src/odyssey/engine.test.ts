@@ -5,7 +5,7 @@ import { actChainQuests, ALL_ECO_BOSSES } from './story';
 import { FRONTIER_GATES, FRONTIER } from './frontier';
 import { TS } from './world';
 import { bossHp, bossMeleeDamage } from './boss-tuning';
-import { enterCitadel } from './depthplay';
+import { enterCitadel, enterTutorialFloor, startTutorial, skipTutorial, TUTORIAL_BOSS_ID, TUTORIAL_FLOORS } from './depthplay';
 import { CITADEL_FINAL_BEAT_ID, CITADEL_FINAL_BOSS_ID, CITADEL_UNLOCK_BOSS_ID } from './demon-citadel';
 
 // Canvas 2D falso: qualquer método é um no-op, gradientes aceitam addColorStop.
@@ -121,6 +121,25 @@ describe('Engine — campanha integrada', { timeout: 90000 }, () => {
     k.killEnemy(boss);
     expect(k.bossesDone.has(CITADEL_FINAL_BOSS_ID)).toBe(true);
     expect(k.cutscene?.beat.id).toBe(CITADEL_FINAL_BEAT_ID);
+  });
+  it('vence o Guardião no sexto piso, retorna ao mundo e abre o guia final com input pausado', () => {
+    const k = make(); startTutorial(k);
+    expect(k.depth?.kind).toBe('tutorial'); expect(k.tutorialPauseInput).toBe(true);
+    enterTutorialFloor(k, TUTORIAL_FLOORS);
+    const boss = k.enemies.find((e) => e.boss?.def.id === TUTORIAL_BOSS_ID)!;
+    expect(k.depth?.floor).toBe(TUTORIAL_FLOORS); expect(boss).toBeDefined();
+    k.killEnemy(boss);
+    expect(k.depth).toBeNull(); expect(k.tutorialDone).toBe(true); expect(k.tutorialModalPending).toBe(true);
+    expect(k.tutorialPauseInput).toBe(true); expect(k.p.points).toBeGreaterThanOrEqual(3);
+  });
+  it('pular o treino grava a dispensa e conserva os campos de tutorial no save', () => {
+    const k = make(); startTutorial(k); skipTutorial(k);
+    const saved = JSON.parse(localStorage.getItem('golden-arrow-save')!);
+    expect(k.depth).toBeNull(); expect(k.tutorialPauseInput).toBe(true);
+    expect(saved.tutorialDone).toBe(true); expect(saved.tutorialModalPending).toBe(true);
+    const h = make(false); h.load();
+    expect(h.tutorialDone).toBe(true); expect(h.tutorialModalPending).toBe(true);
+    expect(h.tutorialPauseInput).toBe(false);
   });
   it('Ciclo do Eco: só após o epílogo, reinicia a campanha, reergue chefes mais fortes e persiste', () => {
     const k = make();
