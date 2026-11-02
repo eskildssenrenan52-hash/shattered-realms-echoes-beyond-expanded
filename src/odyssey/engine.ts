@@ -52,6 +52,7 @@ import { STORY_BOSS_LOOK, STORY_QUESTS, ALL_ECO_BOSSES, beatsFor, depthBonus, cy
 import { arsenalFor, runMove, type BossCtx } from "./boss-arsenal";
 import { fxFor, type FxSig } from "./fx-catalog";
 import { shouldSpawnTwin, twinBossDef, twinEncounterKey } from "./boss-encounters";
+import { freshMercenaryState, sanitizeMercenaryState, tickMercenaries, drawMercenaries, mercGuardMult, mercDamageMult, type MercenaryState } from "./mercenaries";
 
 export const VW = 480;
 export const VH = 270;
@@ -148,6 +149,8 @@ export class Game {
   discoveries = new Set<string>();
   /** Estado aditivo dos dez sistemas de Ecos Além; saves anteriores recebem defaults. */
   echoSystems: EchoSystemsState = freshEchoSystems();
+  /** Companhia contratada: estado aditivo para não quebrar jornadas antigas. */
+  mercenaries: MercenaryState = freshMercenaryState();
   private restoredNpcCache: { key: string; npcs: NpcDef[] } | null = null;
   openedChests = new Set<string>();
   transition = 0;
@@ -480,7 +483,7 @@ export class Game {
     if (!e.alive) return;
     const s = this.stats();
     const crit = Math.random() < 0.05 + s.dex * 0.004;
-    let dmg = Math.max(1, Math.round((raw - e.def) * (0.9 + Math.random() * 0.2) * mult * damageDealtMult(this) * petDamageMult(this) * (crit ? 1.8 : 1)));
+    let dmg = Math.max(1, Math.round((raw - e.def) * (0.9 + Math.random() * 0.2) * mult * damageDealtMult(this) * petDamageMult(this) * mercDamageMult(this) * (crit ? 1.8 : 1)));
     if (e.boss && !e.boss.active) this.activateBoss(e);
     e.hp -= dmg;
     e.hurt = 0.15;
@@ -530,6 +533,8 @@ export class Game {
       this.twinRolls.delete(mainId);
       const b = lead?.boss?.def ?? state.def;
       this.bossesDone.add(mainId);
+      this.mercenaries.contractSeals = Math.min(99, this.mercenaries.contractSeals + 1);
+      this.toast("Selo de contrato conquistado: uma nova aliança pode nascer em Potos.", "#cba7ff");
       if (b.id === TUTORIAL_BOSS_ID) { this.tutorialActive = false; this.tutorialDone = true; this.tutorialFloor = TUTORIAL_FLOORS; this.tutorialModalPending = true; this.tutorialPauseInput = true; this.keys.clear(); this.p.points = Math.max(this.p.points, 3); }
       this.activeBoss = null;
       this.audio.boss = false;
@@ -587,7 +592,7 @@ export class Game {
   hurtPlayer(raw: number, sx: number, sy: number, visual?: FxSig) {
     const p = this.p;
     if (p.inv > 0 || p.dead > 0) return;
-    const dmg = Math.max(1, Math.round((raw - this.defense() * 0.6 + (Math.random() * 4 - 2)) * damageTakenMult(this) * petGuardMult(this)));
+    const dmg = Math.max(1, Math.round((raw - this.defense() * 0.6 + (Math.random() * 4 - 2)) * damageTakenMult(this) * petGuardMult(this) * mercGuardMult(this)));
     p.hp -= dmg;
     p.inv = 0.6;
     const a = Math.atan2(p.y - sy, p.x - sx);
@@ -1204,6 +1209,7 @@ export class Game {
     p.atkCd -= dt; p.spellCd -= dt; p.inv -= dt;
     if (p.attackT > 0) p.attackT -= dt * 4;
     petTick(this, dt);
+    tickMercenaries(this, dt);
     if (!this.interior && (this.keys.has("Space") || this.keys.has("KeyJ"))) this.attack();
 
     if(this.doorCooldown<=0){
@@ -1224,7 +1230,7 @@ export class Game {
           this.burst(s.tx * TS + 8, s.ty * TS, "#80f0ff", 30, 70);
         }
         if (p.respawnStatue !== s.id) p.respawnStatue = s.id;
-        if (p.hp < this.maxHp() || p.mp < this.maxMp()) { p.hp = Math.min(this.maxHp(), p.hp + dt * 40); p.mp = Math.min(this.maxMp(), p.mp + dt * 20); if (Math.random() < 0.2) this.burst(p.x, p.y - 8, "#80f0ff", 1, 20, 1, -40); }
+    if (p.hp < this.maxHp() || p.mp < this.maxMp()) { p.hp = Math.min(this.maxHp(), p.hp + dt * 40); p.mp = Math.min(this.maxMp(), p.mp + dt * 20); if (Math.random() < 0.2) this.burst(p.x, p.y - 8, "#80f0ff", 1, 20, 1, -40); }
       }
     }
 
@@ -1583,6 +1589,7 @@ export class Game {
         drawChar(c, p.x, p.y, look.pal, p.dir, p.frame, { kind: w.weapon ?? "sword", color: w.color }, Math.max(0, p.attackT), look.extras);
       drawAttackFx(c, p.x, p.y, p.dir, Math.max(0, p.attackT), w.weapon ?? "sword", w.color, this.clock);
     } });
+    drawMercenaries(this, c, draws);
     drawPets(this, c, draws, wt);
     draws.sort((a, b) => a.y - b.y);
     for (const d of draws) d.f();
@@ -1828,7 +1835,7 @@ export class Game {
     try {
       const data = {
         p: { ...this.p, ...(this.interior ? this.returnPosition : {}), ...(this.depth ? this.depthReturn : {}), ...(this.sea || this.island ? this.seaReturn : {}), dead: 0 }, abyssBest: this.abyssBest, inventory: this.inventory, questStatus: this.questStatus, questProg: this.questProg,
-        discoveries: [...this.discoveries], openedChests: [...this.openedChests], echoSystems: this.echoSystems,
+        discoveries: [...this.discoveries], openedChests: [...this.openedChests], echoSystems: this.echoSystems, mercenaries: this.mercenaries,
         settlement: this.settlement, terrainEdits:this.terrainEdits, statues: [...this.statues], bosses: [...this.bossesDone], twinRolls: Object.fromEntries(this.twinRolls), time: this.time, cycle: this.cycle, seenBeats: [...this.seenBeats], tutorialDone: this.tutorialDone, tutorialModalPending: this.tutorialModalPending, tutorialModalDone: this.tutorialModalDone,
       };
       localStorage.setItem("golden-arrow-save", JSON.stringify(data));
@@ -1847,6 +1854,7 @@ export class Game {
       applyStructures(this); this.buildMinimap();
       this.discoveries = new Set(d.discoveries ?? []); this.openedChests = new Set(d.openedChests ?? []);
       this.echoSystems = sanitizeEchoSystems(d.echoSystems);
+      this.mercenaries = sanitizeMercenaryState(d.mercenaries);
       this.inventory = d.inventory; this.questStatus = d.questStatus; this.questProg = d.questProg;
       this.statues = new Set(d.statues); this.bossesDone = new Set(d.bosses); this.time = d.time ?? 0.3;
       this.twinRolls = new Map(Object.entries(d.twinRolls ?? {}).map(([id, value]) => [id, !!value]));

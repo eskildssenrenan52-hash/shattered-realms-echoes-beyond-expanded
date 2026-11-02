@@ -31,6 +31,7 @@ import { epicTick, epicNewGame } from "@/odyssey/epic-play";
 import { petsNewGame } from "@/odyssey/pet-play";
 import { PetsPanel } from "@/components/PetsPanel";
 import { EchoesBeyondPanel } from "@/components/EchoesBeyondPanel";
+import { MercenariesPanel } from "@/components/MercenariesPanel";
 import { drawKIcon, kImage } from "@/odyssey/kaetram";
 import { PawPrint } from "lucide-react";
 import { skipTutorial, startTutorial, TUTORIAL_FLOORS } from "@/odyssey/depthplay";
@@ -56,7 +57,7 @@ export const Route = createFileRoute("/odyssey")({
   component: OdysseyScreen,
 });
 
-type Panel = null | "inv" | "char" | "quest" | "map" | "secrets" | "workshop" | "build" | "farm" | "home" | "chronicle" | "bestiary" | "grimoire" | "epic" | "pets" | "echoes";
+type Panel = null | "inv" | "char" | "quest" | "map" | "secrets" | "workshop" | "build" | "farm" | "home" | "chronicle" | "bestiary" | "grimoire" | "epic" | "pets" | "echoes" | "mercenaries";
 
 function Icon({ id, size = 32 }: { id: string; size?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -415,6 +416,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
             {panel === "epic" && <EpicPanel g={g} onClose={() => setPanel(null)} />}
             {panel === "pets" && <PetsPanel g={g} onClose={() => setPanel(null)} />}
             {panel === "echoes" && <EchoesBeyondPanel g={g} onClose={() => setPanel(null)} />}
+            {panel === "mercenaries" && <MercenariesPanel g={g} onClose={() => setPanel(null)} />}
             {panel === "quest" && <QuestBook g={g} onClose={() => setPanel(null)} />}
             {panel === "map" && (
               <Modal title="Atlas de Mana — continente, ilhas e reinos ocultos" onClose={() => setPanel(null)}>
@@ -504,7 +506,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
                   {p:'inv',label:'Mochila',icon:'inv'},{p:'char',label:'Herói',icon:'char'},{p:'quest',label:'Missões',icon:'quest'},{p:'map',label:'Mapa',icon:'map'},
                   {p:'chronicle',label:'Crônica',icon:'chronicle'},{p:'epic',label:'Grande Crônica',icon:'chronicle'},{p:'echoes',label:'Ecos Além',icon:'secrets'},{p:'bestiary',label:'Bestiário',icon:'bestiary'},{p:'grimoire',label:'Grimório',icon:'secrets'},{p:'secrets',label:'Descobertas',icon:'secrets'},
                 ] as const).map(it=><button key={it.p} onClick={()=>{setMenuOpen(false);setPanel(it.p);}}><GameIcon name={it.icon as never} size={30}/><span>{it.label}</span></button>)}
-                <Button variant="game" onClick={()=>{setMenuOpen(false);setPanel('pets');}}><PawPrint size={28}/><span>Pets</span></Button><button onClick={()=>{setMenuOpen(false);setHeroTab('look');setPanel('char');}}><span className="menu-emoji" aria-hidden>🎭</span><span>Aparência</span></button></div>
+                <Button variant="game" onClick={()=>{setMenuOpen(false);setPanel('pets');}}><PawPrint size={28}/><span>Pets</span></Button><Button variant="game" onClick={()=>{setMenuOpen(false);setPanel('mercenaries');}}><Swords size={28}/><span>Mercenários</span></Button><button onClick={()=>{setMenuOpen(false);setHeroTab('look');setPanel('char');}}><span className="menu-emoji" aria-hidden>🎭</span><span>Aparência</span></button></div>
                 <div className="menu-group">Ferramenta · {g.tool==='explore'?'Explorar':g.tool}</div>
                 <div className="menu-grid menu-grid-5">{([{id:'explore',label:'Explorar',icon:'explore'},{id:'mine',label:'Minerar',icon:'mine'},{id:'axe',label:'Lenhar',icon:'axe'},{id:'till',label:'Terra',icon:'till'},{id:'water',label:'Regar',icon:'water'}] as const).map(t=><button key={t.id} className={g.tool===t.id?'on':''} onClick={()=>{g.tool=t.id;setMenuOpen(false);}}><GameIcon name={t.icon as never} size={28}/><span>{t.label}</span></button>)}</div>
                 <div className="menu-group">Lar e oficinas</div>
@@ -527,6 +529,7 @@ export function OdysseyScreen({ startImmediately = false }: { startImmediately?:
       )}
       <footer className="game-toolbar" style={liveOn ? { visibility: "hidden" } : undefined}>
         <Button variant="ghost" size="icon" disabled={title} aria-label="Pets" title="Pets (P)" onClick={()=>setPanel(panel==='pets'?null:'pets')}><PawPrint size={20}/></Button>
+        <Button variant="ghost" size="icon" disabled={title} aria-label="Mercenários" title="Mercenários · contratos e companhia" onClick={()=>setPanel(panel==='mercenaries'?null:'mercenaries')}><Swords size={20}/></Button>
         <Button variant="ghost" size="icon" disabled={title} aria-label="Ecos Além" title="Ecos Além · sistemas da expansão" onClick={()=>setPanel(panel==='echoes'?null:'echoes')}><Sparkles size={20}/></Button>
         <div className="toolbar-actions">{([{p:'inv',icon:Backpack,label:'Inventário'},{p:'char',icon:UserRound,label:'Herói'},{p:'quest',icon:ScrollText,label:'Missões'},{p:'chronicle',icon:BookOpen,label:'Crônica (J)'},{p:'map',icon:Map,label:'Mapa'},{p:'secrets',icon:Compass,label:'Descobertas'},{p:'bestiary',icon:Skull,label:'Bestiário (B)'},{p:'grimoire',icon:Sparkles,label:'Grimório (V)'},{p:'epic',icon:ScrollText,label:'Grande Crônica (O)'}] as const).map(({p:tab,icon:ToolIcon,label})=><Button key={tab} variant="ghost" size="icon" disabled={title} title={label} aria-label={label} onClick={()=>setPanel(panel===tab?null:tab)} className={panel===tab?'text-primary':'text-muted-foreground'}><GameIcon name={tab}/><ToolIcon size={18}/></Button>)}<span className="toolbar-divider"/>{([{id:'explore',icon:Swords,label:'Explorar'},{id:'mine',icon:Pickaxe,label:'Minerar'},{id:'axe',icon:Axe,label:'Cortar madeira'},{id:'till',icon:Shovel,label:'Preparar terra'},{id:'water',icon:Droplets,label:'Regar'}] as const).map(({id,icon:ToolIcon,label})=><Button key={id} variant="ghost" size="icon" aria-label={label} title={label} disabled={title} onClick={()=>{if(g)g.tool=id;}} className={g?.tool===id&&!title?'tool-active':'text-muted-foreground'}><GameIcon name={id}/><ToolIcon size={18}/></Button>)}</div>
         {g && !title && panel === 'home' && <Modal title={`Minha casa · ${HOME_LEVELS[g.settlement.home.level - 1].name}`} onClose={()=>setPanel(null)}>

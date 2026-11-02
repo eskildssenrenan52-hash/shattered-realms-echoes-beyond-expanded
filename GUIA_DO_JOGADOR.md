@@ -182,3 +182,52 @@ Se uma ação não funcionar, verifique nesta ordem:
 7. Só inicie o Novo Ciclo quando os cinco finais regionais estiverem vencidos e todos os desfechos escolhidos.
 
 Boa jornada. Cada sistema da expansão tem sua própria explicação na central, e este manual pode ser aberto novamente a qualquer momento.
+
+
+## 15. Companhia de Mercenários
+
+A Companhia fica disponível no menu móvel e no botão de espadas da barra inferior. Ela não substitui pets nem o herói: é uma camada de aliados humanos com contrato, ferimentos, decisões e memória própria. Você pode manter até dois mercenários ativos ao mesmo tempo, ocupando os slots 1 e 2.
+
+### Como contratar
+
+A Agência oferece cinco personagens. Você pode pagar 140 ouro por contrato ou gastar um Selo de Contrato. Selos são ganhos ao derrotar chefes e são salvos na jornada. O gacha é exclusivamente uma regra de progressão interna: não há dinheiro real, compra externa, energia, anúncios nem temporizador de ansiedade.
+
+Cada tentativa aumenta o contador de pity. Se as nove anteriores não trouxerem uma unidade Raro ou superior, a décima garante uma raridade Raro, Épico ou Lendário. Personagens já obtidos não são repetidos pelo gacha; o resultado sempre amplia o roster. Isso torna a coleção extensa sem transformar a história em uma loteria infinita.
+
+### Os cinco contratos
+
+**Ferrovia, a Muralha que Caminha**, é uma guardiã comum. Tem mais defesa, vida estável e protege o herói quando permanece próximo. Sua história começa com refugiados e placas sem nome: ela não procura glória, procura uma estrada segura para quem ficou para trás.
+
+**Mae das Brumas, a Faca que Escuta**, é uma duelista incomum. Move-se rápido, golpeia de perto e aplica lentidão depois de uma sequência de ataques. Seus capítulos falam sobre cidades onde a memória virou moeda e sobre o preço de continuar reconhecendo as pessoas.
+
+**Irmão Cinzas, o Fogo que Lembra**, é um mago raro. Ataca de longe e espalha parte do impacto em inimigos próximos. Ele não conta a história do mosteiro em um monólogo: suas falas aparecem em capítulos curtos, entre contratos, quando o jogador escolhe ouvi-lo.
+
+**Lia Azul, Cartógrafa das Marés**, é uma curandeira Épica. Recupera parte da vida do grupo em intervalos longos e faz mais sentido em expedições extensas. Seus mapas conectam rotas que só existem quando duas pessoas confiam uma na outra, ligando naturalmente o sistema aos reinos e à Cartografia de Vésper.
+
+**Rei Sem Rosto, o Último Juramento**, é uma lenda. Tem vida e dano altos e fortalece o grupo enquanto permanece saudável. Sua história não glorifica a coroa: trata de removê-la para que o povo reconheça o próprio rosto. O contrato final só amadurece quando a companhia aprende a vencer sem abandonar ninguém.
+
+### Vida, ataque e recuo
+
+Mercenários têm HP separado do herói. Inimigos próximos podem escolher um mercenário como alvo; as barras de vida aparecem acima do aliado no mundo. Eles também atacam alvos próximos de forma automática, respeitando alcance, tempo de recarga, função e nível.
+
+Quando a vida chega a 15% do máximo, o mercenário recua automaticamente. Ele sai do campo, libera o slot e não pode ser recolocado imediatamente. Durante a recuperação, sua vida sobe aos poucos e o cronômetro continua contando mesmo se você fechar o painel ou salvar o jogo. O tempo varia por personagem. Só quando a vida está cheia e o tratamento termina ele volta à reserva.
+
+Recuar não é morte e não apaga vínculo, nível ou capítulos. É uma consequência legível: insistir com a mesma dupla em uma sala perigosa pode deixar a companhia sem aquela função por um trecho inteiro. Planeje uma segunda linha, use uma curandeira em expedições longas e não trate HP baixo como um recurso gratuito.
+
+### Nível e vínculo
+
+Mercenários recebem experiência quando lutam, sobem de nível e ganham vida máxima. O vínculo cresce lentamente em combate e mais rapidamente quando você escolhe ouvir um capítulo pessoal. O vínculo não dá um salto mágico: ele representa conversas, confiança e decisões repetidas.
+
+Duas pessoas diferentes ativas ao mesmo tempo registram uma sinergia de dupla. Guardião e curandeira formam uma linha segura; duelista e mago aceleram a queda de inimigos; lenda e qualquer aliado saudável criam uma composição agressiva. As sinergias são graduais: mudam ritmo e cobertura, mas não substituem o posicionamento do jogador.
+
+### Como a narrativa evita parecer forçada
+
+A Companhia não interrompe a campanha principal para explicar o mundo novamente. Cada personagem entra por um contrato concreto: uma escolta, um mapa, uma cinza, uma promessa. Depois, capítulos curtos surgem em pontos de descanso, na volta a Potos ou ao abrir o painel após uma batalha difícil. O jogo mostra primeiro o comportamento e só depois oferece contexto.
+
+O recuo também é parte da história. Quando alguém retorna ferido, a fala muda: não é uma punição abstrata, é uma lembrança de que a companhia tem limites. Os reinos libertados, os chefes derrotados e as decisões de Ecos Além formam o pano de fundo dos capítulos, para que cada aliado pareça viver no mesmo mundo em vez de funcionar como uma coleção separada.
+
+### Roteiro recomendado
+
+No começo, use Ferrovia para aprender a manter um aliado perto do herói. Depois, teste Mae em áreas com inimigos rápidos. Ao ganhar um Selo em um chefe, tente um contrato de Irmão Cinzas para entender posicionamento à distância. Quando desbloquear Lia, leve-a a uma Expedição Onírica e observe como a recuperação muda o ritmo. Guarde o Rei Sem Rosto para uma combinação em que você consiga preservar a vida dele, porque sua melhor contribuição depende de permanecer saudável.
+
+Se um aliado recuar, não reinicie a jornada nem force o gacha. Troque a composição, avance em uma missão mais segura, complete um capítulo ou volte a Potos. A demora faz parte do desenho: contratar é fácil; construir uma companhia confiável é uma história longa.
